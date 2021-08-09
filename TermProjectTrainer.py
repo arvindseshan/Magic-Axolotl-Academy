@@ -4,7 +4,7 @@ from sklearn.model_selection  import train_test_split
 from sklearn.preprocessing  import LabelEncoder, StandardScaler
 from pickle import dump
 
-# Modified from CMU 15-112 Homework 11
+# Source: CMU 15-112 Homework 11
 def readFile(path):
     with open(path, "rt") as f:
         return f.read()
