@@ -3,8 +3,10 @@ import cv2
 import numpy as np
 # Source: File from https://www.cs.cmu.edu/~112/notes/notes-graphics.html
 from cmu_112_graphics import *
-from keras import models
-from keras.models import load_model
+from tensorflow.keras import models
+from tensorflow.keras.models import load_model
+# from keras import models
+# from keras.models import load_model
 from pickle import load
 import random
 
