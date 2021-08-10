@@ -9,7 +9,7 @@ def readFile(path):
     with open(path, "rt") as f:
         return f.read()
 
-gestures = ["horizontalLine", "verticalLine"]
+gestures = ["—", "|", "u", "n", "⚡", "♥", "none"]
 
 fullData = ''
 

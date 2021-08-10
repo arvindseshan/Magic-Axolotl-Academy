@@ -90,8 +90,8 @@ def getCoodinates(app):
 # Enemy Class
 class Enemy(object):
     colors = ["orange", "yellow", "gray"]
-    gestures = ["horizontalLine", "verticalLine"]
-    def __init__(self, health, speed, radius, x, y):
+    gestures = ["—", "|", "u", "n"]
+    def __init__(self, health, speed, radius, x, y, heart):
         self.health = health
         self.speed = speed
         self.radius = radius
@@ -99,9 +99,15 @@ class Enemy(object):
         self.y = y
         self.color = random.choice(Enemy.colors)
         self.gestures = []
-        for i in range(health):
-            gesture = random.choice(Enemy.gestures)
-            self.gestures.append(gesture)
+        if heart:
+            self.gestures = ["♥"]
+            self.health = 1
+        else:
+            for i in range(health):
+                gesture = random.choice(Enemy.gestures)
+                self.gestures.append(gesture)
+            if random.randint(0, 6) == 1:
+                self.gestures[0] = "⚡"
     def __repr__(self):
         return f"{self.color} enemy at ({self.x}, {self.y}) with {self.health} health and {self.speed} speed"
     def move(self, dx, dy):
@@ -125,6 +131,8 @@ class Player(object):
         self.y = y
     def damagePlayer(self, damage):
         self.health -= damage
+    def healPlayer(self, health):
+        self.health += health
 
 # Returns distance between two points
 def distance(x1, y1, x2, y2):
@@ -154,7 +162,7 @@ def makeEnemy(app):
     health = random.randint(1, 4)
     speed = (5 - health)
     radius = health * 2.5 + 15
-    app.enemies.append(Enemy(health, speed, radius, x, y))
+    app.enemies.append(Enemy(health, speed, radius, x, y, random.randint(app.player.health, 8) < 5))
 
 # Initilizes game
 def appStarted(app):
@@ -218,30 +226,72 @@ def keyPressed(app ,event):
 # Decides action based on gesture prediction
 def predictGesture(app):
     X = [[]]
+    numPoints = (len(app.data)-1) * 8
+    newPoints = [app.data[0]]
+    startX, startY = app.data[0]
     for i in range(len(app.data)-1):
         x, y = app.data[i]
         x2, y2 = app.data[i+1]
         if (x2-x) == 0:
             x2 += 0.1
         slope = (y2-y)/(x2-x)
-        X[0].append(slope)
+        
+        midPoints = int(numPoints/(len(app.data)-1))
+        for j in range(midPoints):
+            dx = ((x2-x)/midPoints)*j
+            dy = (dx*slope)*j
+            newPoints.append((int(x+dx), int(y+dy)))
+    for i in range(numPoints+1):
+        valX, valY = newPoints[i]
+        if i % (numPoints/8) == 0:
+            X[0].append(valX-int(startX))
+            X[0].append(valY-int(startY))
     X = app.scaler.transform(X)
     pred = app.model.predict(X)
     print(pred)
     if pred[0][0] > 0.8:
-        gesture = "horizontalLine"
-        print("horizontalLine")
+        gesture = "—"
+        print("—")
         app.color = "blue"
+    elif pred[0][4] > 0.8:
+        gesture = "|"
+        print("|")
+        app.color = "cyan"
+    elif pred[0][3] > 0.8:
+        gesture = "u"
+        print("u")
+        app.color = "green"
     elif pred[0][1] > 0.8:
-        gesture = "verticalLine"
-        print("verticalLine")
+        gesture = "n"
+        print("n")
+        app.color = "purple"
+    elif pred[0][3] > 0.8:
+        gesture = "none"
+        print("none1")
+        app.color = "pink"
+    elif pred[0][6] > 0.8:
+        gesture = "⚡"
+        print("⚡")
+        app.color = "yellow"
+    elif pred[0][5] > 0.8:
+        gesture = "♥"
+        print("♥")
         app.color = "red"
     else:
         gesture = "none"
-        print("none")
+        print("none2")
         app.color = "pink"
+    return gesture
+    
+def perfromSpells(app, gesture):
+    lightning = False
     for enemy in app.enemies:
-        if enemy.gestures[0] == gesture:
+        if enemy.gestures[0] == gesture and gesture == "⚡":
+            lightning = True
+    for enemy in app.enemies:
+        if enemy.gestures[0] == gesture or lightning:
+            if gesture == "♥":
+                app.player.healPlayer(1)
             enemy.damageEnemy(1)
             if enemy.health <= 0:
                 app.enemies.remove(enemy)
@@ -249,17 +299,29 @@ def predictGesture(app):
                 for i in range(random.randint(2, 6)):
                     moveEnemyInDir(app, enemy, -1)
 
-# Creates list of slopes in hand pos list and saves
+# Creates scaled list of coords from hand pos list and saves
 # to line in txt file with the gesture name
 def recordData(app, gesture):
     file = open(f"{gesture}.txt", "a")
+    numPoints = (len(app.data)-1) * 8
+    newPoints = [app.data[0]]
+    startX, startY = app.data[0]
     for i in range(len(app.data)-1):
         x, y = app.data[i]
         x2, y2 = app.data[i+1]
         if (x2-x) == 0:
             x2 += 0.1
         slope = (y2-y)/(x2-x)
-        file.write(f"{slope},")
+        
+        midPoints = int(numPoints/(len(app.data)-1))
+        for j in range(midPoints):
+            dx = ((x2-x)/midPoints)*j
+            dy = (dx*slope)*j
+            newPoints.append((int(x+dx), int(y+dy)))
+    for i in range(numPoints+1):
+        valX, valY = newPoints[i]
+        if i % (numPoints/8) == 0:
+            file.write(f"{valX-int(startX)},{valY-int(startY)},")
     file.write(gesture)
     file.write("\n")
     app.data = [] 
@@ -287,17 +349,24 @@ def doStep(app):
     else:
         app.player.move(app.cx2, app.cy2)
         app.data = []
-    if len(app.data) == 15:
-        if app.record:
-            recordData(app, "circle")
-        else:
-            x1, y1 = app.data[-1]
-            x2, y2 = app.data[-2]
-            if distance(x1, y1, x2, y2) < 5:
-                predictGesture(app)
-                app.data = []
+    if len(app.data) >= 5: 
+        x1, y1 = app.data[-1]
+        x2, y2 = app.data[-2]
+        if distance(x1, y1, x2, y2) < 5:
+            if app.record:
+                recordData(app, "♥")
             else:
-                app.data.pop(0)
+                gesture = predictGesture(app)
+                perfromSpells(app, gesture)
+                app.data = []
+    elif len(app.data) >= 20:
+        app.data = []
+    elif len(app.data) == 2:
+        x1, y1 = app.data[0]
+        x2, y2 = app.data[1]
+        if distance(x1, y1, x2, y2) < 10:
+            app.data = []
+
     app.timer += 1
 
 # Perform step of the game when timer is fired
@@ -325,11 +394,15 @@ def drawEnemies(app, canvas):
         #canvas.create_text(enemy.x, enemy.y, text = str(enemy.health))
         gesturesString = ""
         for gesture in enemy.gestures:
-            #gesturesString += gesture[0]
-            if gesture == "horizontalLine":
-                gesturesString += "— "
-            elif gesture == "verticalLine":
-                gesturesString += "| "
+            gesturesString += gesture[0] + " "
+            #if gesture == "—":
+            #    gesturesString += "— "
+            #elif gesture == "|":
+            #    gesturesString += " "
+            #elif gesture == "u":
+            #    gesturesString += "u "
+            #elif gesture == "n":
+            #    gesturesString += "n "
         gesturesString = gesturesString[:-1]
         canvas.create_text(enemy.x, enemy.y-enemy.radius-15, text = gesturesString, fill = "orange", font = "Arial 16 bold")
 
