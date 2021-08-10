@@ -68,12 +68,12 @@ def getCoodinates(app):
                 cx = int(M["m10"] / M["m00"])
                 cy = int(M["m01"] / M["m00"])
                 if i == 0:
-                    app.cx = app.width - cx
-                    app.cy = cy
+                    app.cx = app.width - cx*2
+                    app.cy = cy*2
                     color = (0, 0, 255)
                 elif i == 1:
-                    app.cx2 = app.width - cx
-                    app.cy2 = cy
+                    app.cx2 = app.width - cx*2
+                    app.cy2 = cy*2
                     color = (0, 255, 0)
             # plots center and contours on vid window
             cv2.circle(vid, (cx, cy), 10, color, -1)
@@ -138,18 +138,82 @@ class Player(object):
 def distance(x1, y1, x2, y2):
     return ((x2-x1)**2 + (y2-y1)**2)**0.5
 
+# Finds shortest path between two cells
+def findShortestPath(startRow, startCol, endRow, endCol, rows, cols, walls):
+    found = False
+    cellMap = {}
+    visitedCells = set()
+    unvisitedNeighborsQueue = [(startRow, startCol)]
+    while len(unvisitedNeighborsQueue) != 0:
+        row, col = unvisitedNeighborsQueue[0]
+        unvisitedNeighborsQueue.pop(0)
+        if (row, col) in visitedCells:
+            continue
+        else:
+            visitedCells.add((row, col))
+        if row == endRow and col == endCol:
+            found = True
+            break
+        for dCol, dRow in [(-1, 0),(0, 1),(1, 0), (0, -1),(-1, -1),(1, 1),(-1, 1),(1, -1)]:
+            newRow = row - dRow
+            newCol = col - dCol
+            if 0 <= newRow < rows and 0 <= newCol < cols and (newRow, newCol) not in visitedCells and not walls[newRow][newCol]:
+                unvisitedNeighborsQueue.append((newRow, newCol))
+                cellMap[(newRow, newCol)] = cellMap.get((newRow, newCol), (row, col))
+    if found:
+        result = (endRow, endCol)
+        path = []
+        while result != (startRow, startCol):
+            path.append(result)
+            result = cellMap[result]
+        path.append((startRow, startCol))
+        path.reverse()
+        return path
+    else:
+        return []
+
+def getCell(app, x, y):
+    cellWidth  = (app.width) / app.cols
+    cellHeight = (app.height) / app.rows
+    row = int(y // cellHeight)
+    col = int(x // cellWidth)
+    return row, col
+
+def getCellBounds(app, row, col):
+    cellWidth = app.width / app.cols
+    cellHeight = app.height / app.rows
+    x1 = col * cellWidth
+    x2 = x1 + cellWidth
+    y1 = row * cellHeight
+    y2 = y1 + cellHeight
+    return x1, y1, x2, y2
+
+def getCellCenter(app, row, col):
+    x1, y1, x2, y2 = getCellBounds(app, row, col)
+    x = x1 + (x2-x1)/2
+    y = y1 + (y2-y1)/2
+    return x, y
+
 # Moves the enemy away or towards the player and checks for collision
 def moveEnemyInDir(app, enemy, dir):
-    dx = (app.player.x - enemy.x)/(60-enemy.speed) * dir
-    dy = (app.player.y - enemy.y)/(60-enemy.speed) * dir
-    enemy.move(dx, dy)
-    if distance(enemy.x, enemy.y, app.player.x, app.player.y) < enemy.radius + app.player.radius:
-        app.enemies.remove(enemy)
-        app.player.damagePlayer(1)
-        app.curMotion = app.damagedMotion
-        app.dmCounter = app.motionCounter
-        if app.player.health <= 0:
-            app.gameOver = True
+    cellWidth = app.width / app.cols
+    cellHeight = app.height / app.rows
+    startRow, startCol = getCell(app, enemy.x, enemy.y)
+    endRow, endCol = getCell(app, app.player.x, app.player.y)
+    path = findShortestPath(startRow, startCol, endRow, endCol, app.rows, app.cols, app.walls)
+    if len(path) > 1:
+        row1, col1 = path[0]
+        row2, col2 = path[1]
+        dy = (row2 - row1) * cellWidth * enemy.speed/7
+        dx = (col2 - col1) * cellHeight* enemy.speed/7
+        enemy.move(dx*dir, dy*dir)
+        if distance(enemy.x, enemy.y, app.player.x, app.player.y) < enemy.radius + app.player.radius:
+            app.enemies.remove(enemy)
+            app.player.damagePlayer(1)
+            app.curMotion = app.damagedMotion
+            app.dmCounter = app.motionCounter
+            if app.player.health <= 0:
+                app.gameOver = True
 
 # Creates a new Enemy object with randomized stats and start loc
 def makeEnemy(app):
@@ -166,6 +230,9 @@ def makeEnemy(app):
 
 # Initilizes game
 def appStarted(app):
+    app.rows = 45
+    app.cols = 60
+    app.walls = [[False]*app.cols for i in range(app.rows)]
     app.gameOver = False
     # Hand locations
     app.cx = app.width/2
@@ -176,7 +243,7 @@ def appStarted(app):
     #Sprites
     # Image Source: https://wallpapersafari.com/w/qofi3X
     app.background = app.loadImage("underwaterBackground.jpg")
-    app.background = app.scaleImage(app.background, 0.625)
+    app.background = app.scaleImage(app.background, 1.25)
     # Image Source: https://spelunky.fyi/mods/m/axolotl-spelunker/
     axolotlSpriteSheet = app.loadImage("axolotlSprite.png")
     app.generalMotion = []
@@ -205,6 +272,7 @@ def appStarted(app):
     app.paused = False
     app.timer  = 0
     app.enemies = []
+    app.addWalls = False
     app.player = Player(5, 45, "brown", app.width/2, app.height/2)
     # Model and scaler for gesture recognition
     # Source for loading model: https://keras.io/api/models/model_saving_apis/#save_model-function
@@ -221,6 +289,13 @@ def keyPressed(app ,event):
         app.paused = not app.paused
     if app.paused and not app.gameOver and event.key == 's':
         doStep(app)
+    if event.key == 'w':
+        app.addWalls = not app.addWalls
+
+def mousePressed(app, event):
+    (row, col) = getCell(app, event.x, event.y)
+    if app.addWalls:
+     app.walls[row][col] = not app.walls[row][col]
 
 # Creates list of slopes in hand pos list and inputs into model to predict gesture
 # Decides action based on gesture prediction
@@ -248,7 +323,6 @@ def predictGesture(app):
             X[0].append(valY-int(startY))
     X = app.scaler.transform(X)
     pred = app.model.predict(X)
-    print(pred)
     if pred[0][0] > 0.8:
         gesture = "—"
         print("—")
@@ -340,10 +414,10 @@ def doStep(app):
         if app.curMotion == app.damagedMotion and app.motionCounter - app.dmCounter == len(app.damagedMotion)-1:
             app.curMotion = app.generalMotion
     getCoodinates(app)
-    if app.width-300 < app.cx < app.width and 0 < app.cy < app.height:
+    if app.width-400 < app.cx < app.width and 0 < app.cy < app.height:
         app.data.append((app.cx, app.cy))
         app.player.move(app.cx2, app.cy2)
-    elif app.width-300 < app.cx2 < app.width and 0 < app.cy2 < app.height:
+    elif app.width-400 < app.cx2 < app.width and 0 < app.cy2 < app.height:
         app.data.append((app.cx2, app.cy2))
         app.player.move(app.cx, app.cy)
     else:
@@ -416,7 +490,7 @@ def drawPlayer(app, canvas):
 # Redraws all
 def redrawAll(app, canvas):
     canvas.create_image(app.width/2, app.height/2, image=ImageTk.PhotoImage(app.background))
-    #canvas.create_rectangle(app.width-200, 0, app.width, app.height, fill = app.color)
+    #canvas.create_rectangle(app.width-400, 0, app.width, app.height, fill = app.color)
     canvas.create_oval(app.cx-10, app.cy-10, app.cx+10, app.cy+10)
     canvas.create_oval(app.cx2-10, app.cy2-10, app.cx2+10, app.cy2+10)
     drawPlayer(app, canvas)
@@ -426,4 +500,11 @@ def redrawAll(app, canvas):
     if app.gameOver:
         canvas.create_text(app.width/2, app.height/2, text = "Game Over", font = "Arial 30 bold")
     #canvas.create_oval(app.cx, app.cy, app.cx2, app.cy2, fill = '', outline="black", width=5)
-runApp(width=640, height=480)
+    for row in range(app.rows):
+        for col in range(app.cols):
+            (x0, y0, x1, y1) = getCellBounds(app, row, col)
+            fill = ""
+            if app.walls[row][col]:
+                fill = "black"
+            canvas.create_rectangle(x0, y0, x1, y1, fill=fill)
+runApp(width=1280, height=960)

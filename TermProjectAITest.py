@@ -65,7 +65,7 @@ def appStarted(app):
     app.cols = 60
     app.margin = 5 # margin around grid
     app.selections = [] # (row, col) of selection, (-1,-1) for none
-    app.walls = [[False]*cols for i in range(rows)]
+    app.walls = [[False]*app.cols for i in range(app.rows)]
     for i in range(10):
         randX = random.randint(0, app.cols-1)
         randY = random.randint(0, app.rows-1)
