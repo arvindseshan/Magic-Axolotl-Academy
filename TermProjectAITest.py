@@ -43,7 +43,6 @@ def findShortestPath(startRow, startCol, endRow, endCol, rows, cols, walls):
         return []
             
 
-
 #print(findShortestPath(0, 0, 18, 10, rows, cols, walls))
 
 #[(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 8), (0, 9), (0, 10),
@@ -58,16 +57,25 @@ def findShortestPath(startRow, startCol, endRow, endCol, rows, cols, walls):
 # (11, 12), (11, 11), (11, 10), (12, 10), (13, 10), (14, 10), (15, 10), (16, 10), (17, 10), (18, 10)]
 
 from cmu_112_graphics import *
+import random
 
 def appStarted(app):
     app.addWalls = False
-    app.rows = 20
-    app.cols = 20
+    app.rows = 45
+    app.cols = 60
     app.margin = 5 # margin around grid
     app.selections = [] # (row, col) of selection, (-1,-1) for none
     app.walls = [[False]*cols for i in range(rows)]
-    for i in range(app.cols-1):
-        app.walls[10][i] = True
+    for i in range(10):
+        randX = random.randint(0, app.cols-1)
+        randY = random.randint(0, app.rows-1)
+        dx, dy = random.choice([(-1, 0), (1, 0), (0, -1), (0, 1)])
+        randLength = random.randint(7, 20)
+        for i in range(randLength):
+            curX = randX + i*dx
+            curY = randY + i*dy
+            if 0 <= curX < app.cols and 0 <= curY < app.rows:
+                app.walls[curX][curY] = True
     app.path = []
 
 def pointInGrid(app, x, y):
@@ -76,21 +84,10 @@ def pointInGrid(app, x, y):
             (app.margin <= y <= app.height-app.margin))
 
 def getCell(app, x, y):
-    # aka "viewToModel"
-    # return (row, col) in which (x, y) occurred or (-1, -1) if outside grid.
-    if (not pointInGrid(app, x, y)):
-        return (-1, -1)
-    gridWidth  = app.width - 2*app.margin
-    gridHeight = app.height - 2*app.margin
-    cellWidth  = gridWidth / app.cols
-    cellHeight = gridHeight / app.rows
-
-    # Note: we have to use int() here and not just // because
-    # row and col cannot be floats and if any of x, y, app.margin,
-    # cellWidth or cellHeight are floats, // would still produce floats.
-    row = int((y - app.margin) / cellHeight)
-    col = int((x - app.margin) / cellWidth)
-
+    cellWidth  = (app.width - 2*app.margin) / app.cols
+    cellHeight = (app.height - 2*app.margin) / app.rows
+    row = int((y - app.margin) // cellHeight)
+    col = int((x - app.margin) // cellWidth)
     return (row, col)
 
 def getCellBounds(app, row, col):
@@ -131,4 +128,4 @@ def redrawAll(app, canvas):
                 fill = "black"
             canvas.create_rectangle(x0, y0, x1, y1, fill=fill)
 
-runApp(width=400, height=400)
+runApp(width=640, height=480)
