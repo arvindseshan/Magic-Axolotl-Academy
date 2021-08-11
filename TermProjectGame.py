@@ -22,12 +22,15 @@ cv2.namedWindow('vid')
 
 # Inspiration for trackerbars: https://www.tutscode.net/2020/04/color-detection-with-python-and-opencv.html
 # Create sliders for HSV min and max for adjusting to object color
+
+'''
 cv2.createTrackbar('hMin', 'vid', 90, 179, whenTrackerbarChanged)
 cv2.createTrackbar('hMax', 'vid', 162, 179, whenTrackerbarChanged)
 cv2.createTrackbar('sMin', 'vid', 45, 255, whenTrackerbarChanged)
 cv2.createTrackbar('sMax', 'vid', 251, 255, whenTrackerbarChanged)
 cv2.createTrackbar('vMin', 'vid', 133, 255, whenTrackerbarChanged)
 cv2.createTrackbar('vMax', 'vid', 255, 255, whenTrackerbarChanged)
+'''
 
 def getCoodinates(app):
     worked, vid = cap.read()
@@ -35,14 +38,21 @@ def getCoodinates(app):
         return
     # Convert from BGR to HSV color
     hsv = cv2.cvtColor(vid, cv2.COLOR_BGR2HSV)
-
+    '''
     hMin = cv2.getTrackbarPos('hMin', 'vid')
     hMax = cv2.getTrackbarPos('hMax', 'vid')
     sMin = cv2.getTrackbarPos('sMin', 'vid')
     sMax = cv2.getTrackbarPos('sMax', 'vid')
     vMin = cv2.getTrackbarPos('vMin', 'vid')
     vMax = cv2.getTrackbarPos('vMax', 'vid')
-
+    '''
+    
+    hMin = 90
+    hMax = 162
+    sMin = 45
+    sMax = 251
+    vMin = 133
+    vMax = 255
     # Adjust the min and max color range based on the hsv sliders
     colorMin = np.array([hMin, sMin, vMin])
     colorMax = np.array([hMax, sMax, vMax])
@@ -209,7 +219,7 @@ def shortestPathToPlayer(app, x, y):
     return findShortestPath(startRow, startCol, endRow, endCol, app.rows, app.cols, app.walls)
 
 # Moves the enemy away or towards the player and checks for collision
-def moveEnemyInDir(app, enemy, dir):
+def moveEnemy(app, enemy):
     cellWidth = (app.width-app.spellSize) / app.cols
     cellHeight = app.height / app.rows
     path = shortestPathToPlayer(app, enemy.x, enemy.y)
@@ -218,7 +228,7 @@ def moveEnemyInDir(app, enemy, dir):
         row2, col2 = path[1]
         dy = (row2 - row1) * cellWidth * enemy.speed/7
         dx = (col2 - col1) * cellHeight* enemy.speed/7
-        enemy.move(dx*dir, dy*dir)
+        enemy.move(dx, dy)
         if dx > 0:
             enemy.dir(1)
         else:
@@ -451,7 +461,7 @@ def predictGesture(app):
     return gesture
 
 # Makes enemies take damage and heals players based on the gesture
-def perfromSpells(app, gesture):
+def performSpells(app, gesture):
     app.lightning = False
     if not app.countdown and not app.gameStarted and gesture == "⚡":
         app.countdown = True
@@ -470,9 +480,6 @@ def perfromSpells(app, gesture):
             if enemy.health <= 0:
                 app.enemies.remove(enemy)
                 app.score += 100
-            else:
-                for i in range(random.randint(2, 6)):
-                    moveEnemyInDir(app, enemy, -1)
 
 # Creates scaled list of coords from hand pos list and saves
 # to line in txt file with the gesture name
@@ -509,7 +516,7 @@ def doGameStep(app):
     app.smCounter += 1
     if not app.record:
         for enemy in app.enemies:
-            moveEnemyInDir(app, enemy, 1)
+            moveEnemy(app, enemy)
         if app.timer % 40 == 0:
             makeEnemy(app)
         if app.curMotion == app.damagedMotion and app.motionCounter - app.dmCounter == len(app.damagedMotion)-1:
@@ -543,7 +550,7 @@ def doGameStep(app):
                 recordData(app, app.gestureToTrain)
             else:
                 gesture = predictGesture(app)
-                perfromSpells(app, gesture)
+                performSpells(app, gesture)
                 app.data = []
     elif len(app.data) >= 20:
         app.data = []
@@ -571,7 +578,7 @@ def doMenuStep(app):
                 recordData(app, app.gestureToTrain)
             else:
                 gesture = predictGesture(app)
-                perfromSpells(app, gesture)
+                performSpells(app, gesture)
                 app.data = []
     elif len(app.data) >= 20:
         app.data = []
@@ -691,7 +698,7 @@ def redrawAll(app, canvas):
         drawGameInfo(app, canvas)
         if app.gameOver:
             canvas.create_text((app.width-app.spellSize)/2, app.height/2, text = "Game Over", fill = "orange", font = "Arial 60 bold")
-    else:
+    elif not app.countdown:
         drawCover(app, canvas)
 
 runApp(width=1280+600, height=960)
