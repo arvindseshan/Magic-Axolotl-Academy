@@ -233,6 +233,7 @@ def appStarted(app):
     app.rows = 45
     app.cols = 60
     app.walls = [[False]*app.cols for i in range(app.rows)]
+    app.gameStarted = False
     app.gameOver = False
     # Hand locations
     app.cx = app.width/2
@@ -240,10 +241,12 @@ def appStarted(app):
     app.cx2 = app.width/2
     app.cy2 = app.height/2
     timerDelay = 0
-    #Sprites
+    # Sprites and images
     # Image Source: https://wallpapersafari.com/w/qofi3X
     app.background = app.loadImage("underwaterBackground.jpg")
     app.background = app.scaleImage(app.background, 1.25)
+    # Image credits: canva.com
+    app.cover = app.loadImage("cover.png")
     # Image Source: https://spelunky.fyi/mods/m/axolotl-spelunker/
     axolotlSpriteSheet = app.loadImage("axolotlSprite.png")
     app.generalMotion = []
@@ -283,6 +286,7 @@ def appStarted(app):
 # Records data from training when f key pressed
 # Pauses game with p and steps with s for debugging
 def keyPressed(app ,event):
+    app.gameStarted = True
     if event.key == 'f':
         app.record = not app.record
     if event.key == 'p':
@@ -292,6 +296,7 @@ def keyPressed(app ,event):
     if event.key == 'w':
         app.addWalls = not app.addWalls
 
+# Temp function to manually add walls to the game
 def mousePressed(app, event):
     (row, col) = getCell(app, event.x, event.y)
     if app.addWalls:
@@ -356,7 +361,8 @@ def predictGesture(app):
         print("none2")
         app.color = "pink"
     return gesture
-    
+
+# Makes enemies take damage and heals players based on the gesture
 def perfromSpells(app, gesture):
     lightning = False
     for enemy in app.enemies:
@@ -414,10 +420,10 @@ def doStep(app):
         if app.curMotion == app.damagedMotion and app.motionCounter - app.dmCounter == len(app.damagedMotion)-1:
             app.curMotion = app.generalMotion
     getCoodinates(app)
-    if app.width-400 < app.cx < app.width and 0 < app.cy < app.height:
+    if app.width-600 < app.cx < app.width and 0 < app.cy < app.height:
         app.data.append((app.cx, app.cy))
         app.player.move(app.cx2, app.cy2)
-    elif app.width-400 < app.cx2 < app.width and 0 < app.cy2 < app.height:
+    elif app.width-600 < app.cx2 < app.width and 0 < app.cy2 < app.height:
         app.data.append((app.cx2, app.cy2))
         app.player.move(app.cx, app.cy)
     else:
@@ -445,7 +451,7 @@ def doStep(app):
 
 # Perform step of the game when timer is fired
 def timerFired(app):
-    if app.paused or app.gameOver:
+    if app.paused or app.gameOver or not app.gameStarted:
         return
     doStep(app)
 
@@ -487,24 +493,34 @@ def drawPlayer(app, canvas):
     canvas.create_image(app.player.x-5, app.player.y, image=ImageTk.PhotoImage(sprite))
     canvas.create_text(app.player.x, app.player.y-app.player.radius-10, text = str(app.player.health))
 
+# Draws the main menu
+def drawCover(app, canvas):
+    canvas.create_image(app.width/2, app.height/2, image=ImageTk.PhotoImage(app.cover))
+    canvas.create_text(app.width/2, 10, text = "Magic Axolotl Academy", anchor = "n", font = "Arial 40 bold")
+    canvas.create_rectangle(3*app.width/5, app.height/4, 3*app.width/5 + 300, app.height/4 + 100, fill = "aqua")
+
 # Redraws all
 def redrawAll(app, canvas):
-    canvas.create_image(app.width/2, app.height/2, image=ImageTk.PhotoImage(app.background))
-    #canvas.create_rectangle(app.width-400, 0, app.width, app.height, fill = app.color)
-    canvas.create_oval(app.cx-10, app.cy-10, app.cx+10, app.cy+10)
-    canvas.create_oval(app.cx2-10, app.cy2-10, app.cx2+10, app.cy2+10)
-    drawPlayer(app, canvas)
-    drawEnemies(app, canvas)
-    drawTrail(app, canvas)
-    canvas.create_text(app.width/2, 10, text = f"({app.cx}, {app.cy}) ({app.cx2}, {app.cy2})")
-    if app.gameOver:
-        canvas.create_text(app.width/2, app.height/2, text = "Game Over", font = "Arial 30 bold")
-    #canvas.create_oval(app.cx, app.cy, app.cx2, app.cy2, fill = '', outline="black", width=5)
-    for row in range(app.rows):
-        for col in range(app.cols):
-            (x0, y0, x1, y1) = getCellBounds(app, row, col)
-            fill = ""
-            if app.walls[row][col]:
-                fill = "black"
-            canvas.create_rectangle(x0, y0, x1, y1, fill=fill)
+    if app.gameStarted:
+        canvas.create_image(app.width/2, app.height/2, image=ImageTk.PhotoImage(app.background))
+        #canvas.create_rectangle(app.width-600, 0, app.width, app.height, fill = app.color)
+        canvas.create_oval(app.cx-10, app.cy-10, app.cx+10, app.cy+10)
+        canvas.create_oval(app.cx2-10, app.cy2-10, app.cx2+10, app.cy2+10)
+        drawPlayer(app, canvas)
+        drawEnemies(app, canvas)
+        drawTrail(app, canvas)
+        canvas.create_text(app.width/2, 10, text = f"({app.cx}, {app.cy}) ({app.cx2}, {app.cy2})")
+        if app.gameOver:
+            canvas.create_text(app.width/2, app.height/2, text = "Game Over", font = "Arial 30 bold")
+        #canvas.create_oval(app.cx, app.cy, app.cx2, app.cy2, fill = '', outline="black", width=5)
+        for row in range(app.rows):
+            for col in range(app.cols):
+                (x0, y0, x1, y1) = getCellBounds(app, row, col)
+                fill = ""
+                if app.walls[row][col]:
+                    fill = "black"
+                canvas.create_rectangle(x0, y0, x1, y1, fill=fill)
+    else:
+        drawCover(app, canvas)
+
 runApp(width=1280, height=960)
