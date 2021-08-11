@@ -68,11 +68,11 @@ def getCoodinates(app):
                 cx = int(M["m10"] / M["m00"])
                 cy = int(M["m01"] / M["m00"])
                 if i == 0:
-                    app.cx = app.width - cx*2
+                    app.cx = app.width - cx*2.9375
                     app.cy = cy*2
                     color = (0, 0, 255)
                 elif i == 1:
-                    app.cx2 = app.width - cx*2
+                    app.cx2 = app.width - cx*2.9375
                     app.cy2 = cy*2
                     color = (0, 255, 0)
             # plots center and contours on vid window
@@ -126,7 +126,10 @@ class Player(object):
         self.color = color
         self.x = x
         self.y = y
-    def move(self, x, y):
+    def move(self, dx, dy):
+        self.x += dx
+        self.y += dy
+    def teleport(self, x, y):
         self.x = x
         self.y = y
     def damagePlayer(self, damage):
@@ -138,6 +141,8 @@ class Player(object):
 def distance(x1, y1, x2, y2):
     return ((x2-x1)**2 + (y2-y1)**2)**0.5
 
+
+# Pseudocode for BFS algorithm from 15-112 Graphs/AI lesson slides
 # Finds shortest path between two cells
 def findShortestPath(startRow, startCol, endRow, endCol, rows, cols, walls):
     found = False
@@ -173,14 +178,14 @@ def findShortestPath(startRow, startCol, endRow, endCol, rows, cols, walls):
         return []
 
 def getCell(app, x, y):
-    cellWidth  = (app.width) / app.cols
+    cellWidth = (app.width-app.spellSize) / app.cols
     cellHeight = (app.height) / app.rows
     row = int(y // cellHeight)
     col = int(x // cellWidth)
     return row, col
 
 def getCellBounds(app, row, col):
-    cellWidth = app.width / app.cols
+    cellWidth = (app.width-app.spellSize) / app.cols
     cellHeight = app.height / app.rows
     x1 = col * cellWidth
     x2 = x1 + cellWidth
@@ -196,7 +201,7 @@ def getCellCenter(app, row, col):
 
 # Moves the enemy away or towards the player and checks for collision
 def moveEnemyInDir(app, enemy, dir):
-    cellWidth = app.width / app.cols
+    cellWidth = (app.width-app.spellSize) / app.cols
     cellHeight = app.height / app.rows
     startRow, startCol = getCell(app, enemy.x, enemy.y)
     endRow, endCol = getCell(app, app.player.x, app.player.y)
@@ -215,30 +220,75 @@ def moveEnemyInDir(app, enemy, dir):
             if app.player.health <= 0:
                 app.gameOver = True
 
+def movePlayer(app, x, y):
+    cellWidth = (app.width-app.spellSize) / app.cols
+    cellHeight = app.height / app.rows
+    startRow, startCol = getCell(app, app.player.x, app.player.y)
+    endRow, endCol = getCell(app, x, y)
+    path = findShortestPath(startRow, startCol, endRow, endCol, app.rows, app.cols, app.walls)
+    if len(path) > 1:
+        row1, col1 = path[0]
+        row2, col2 = path[1]
+        dy = (row2 - row1) * cellWidth
+        dx = (col2 - col1) * cellHeight
+        app.player.move(dx, dy)
+
+
 # Creates a new Enemy object with randomized stats and start loc
 def makeEnemy(app):
     if random.randint(0,1) == 0:
-        x = random.randint(0, app.width)
+        x = random.randint(0, app.width-app.spellSize)
         y = random.choice([0, app.height])
     else:
-        x = random.choice([0, app.width])
+        x = random.choice([0, app.width-app.spellSize])
         y = random.randint(0, app.height)
     health = random.randint(1, 4)
     speed = (5 - health)
     radius = health * 2.5 + 15
     app.enemies.append(Enemy(health, speed, radius, x, y, random.randint(app.player.health, 8) < 5))
 
+def countNeighbors(app, row, col):
+    neighbors = 0
+    for dRow in [-1, 0, 1]:
+        for dCol in [-1, 0, 1]:
+            newRow = row + dRow
+            newCol = col + dCol
+            if 0 <= newRow < app.rows and 0 <= newCol < app.cols and app.walls[newRow][newCol]:
+                neighbors += 1
+    neighbors -= 1
+    return neighbors
+
+# Concept (description) for random cave generation from http://pixelenvy.ca/wa/ca_cave.html (4-5 rule) modified for wall generation
+def makeWalls(app, filled, passes):
+    for row in range(app.rows):
+        for col in range(app.cols):
+            if random.randint(1, 100) >= filled:
+                app.walls[row][col] = False
+    for i in range(passes):
+        newWalls = [[None]*app.cols for i in range(app.rows)]
+        for row in range(app.rows):
+            for col in range(app.cols):
+                if app.walls[row][col] and countNeighbors(app, row, col) <= 3:
+                    newWalls[row][col] = False
+                elif countNeighbors(app, row, col) > 5:
+                    newWalls[row][col] = True
+                else:
+                    newWalls[row][col] = app.walls[row][col]
+        app.walls = newWalls
+
 # Initilizes game
 def appStarted(app):
+    app.spellSize = 600
     app.rows = 45
     app.cols = 60
-    app.walls = [[False]*app.cols for i in range(app.rows)]
+    app.walls = [[True]*app.cols for i in range(app.rows)]
+    makeWalls(app, 60, 20)
     app.gameStarted = False
     app.gameOver = False
     # Hand locations
-    app.cx = app.width/2
+    app.cx = app.width/2 - app.spellSize/2
     app.cy = app.height/2
-    app.cx2 = app.width/2
+    app.cx2 = app.width/2 - app.spellSize/2
     app.cy2 = app.height/2
     timerDelay = 0
     # Sprites and images
@@ -286,14 +336,17 @@ def appStarted(app):
 # Records data from training when f key pressed
 # Pauses game with p and steps with s for debugging
 def keyPressed(app ,event):
-    app.gameStarted = True
-    if event.key == 'f':
+    if event.key == 's':
+        app.gameStarted = True
+    elif event.key == 'f':
         app.record = not app.record
-    if event.key == 'p':
+    elif not app.gameStarted:
+        return
+    elif event.key == 'p':
         app.paused = not app.paused
-    if app.paused and not app.gameOver and event.key == 's':
-        doStep(app)
-    if event.key == 'w':
+    elif app.paused and not app.gameOver and event.key == 's':
+        doGameStep(app)
+    elif event.key == 'w':
         app.addWalls = not app.addWalls
 
 # Temp function to manually add walls to the game
@@ -364,6 +417,8 @@ def predictGesture(app):
 
 # Makes enemies take damage and heals players based on the gesture
 def perfromSpells(app, gesture):
+    if not app.gameStarted and gesture == "⚡":
+        app.gameStarted = True
     lightning = False
     for enemy in app.enemies:
         if enemy.gestures[0] == gesture and gesture == "⚡":
@@ -409,7 +464,7 @@ def recordData(app, gesture):
 # Perform a step of the game to move enemies, make enemies,
 # update animation counters, keep track of hand locations,
 # and perfrom gesture recognition
-def doStep(app):
+def doGameStep(app):
     app.motionCounter = (1 + app.motionCounter)
     app.smCounter = (1 + app.smCounter)
     if not app.record:
@@ -420,21 +475,30 @@ def doStep(app):
         if app.curMotion == app.damagedMotion and app.motionCounter - app.dmCounter == len(app.damagedMotion)-1:
             app.curMotion = app.generalMotion
     getCoodinates(app)
-    if app.width-600 < app.cx < app.width and 0 < app.cy < app.height:
+    if app.width-app.spellSize < app.cx < app.width and 0 < app.cy < app.height:
         app.data.append((app.cx, app.cy))
-        app.player.move(app.cx2, app.cy2)
-    elif app.width-600 < app.cx2 < app.width and 0 < app.cy2 < app.height:
+        if 0 < app.player.x <= app.width - app.spellSize and 0 < app.player.y <= app.height:
+            movePlayer(app, app.cx2, app.cy2)
+        else:
+            app.player.teleport(app.cx2, app.cy2)
+    elif app.width-app.spellSize < app.cx2 < app.width and 0 < app.cy2 < app.height:
         app.data.append((app.cx2, app.cy2))
-        app.player.move(app.cx, app.cy)
+        if 0 < app.player.x <= app.width - app.spellSize and 0 < app.player.y <= app.height:
+            movePlayer(app, app.cx, app.cy)
+        else:
+            app.player.teleport(app.cx, app.cy)
     else:
-        app.player.move(app.cx2, app.cy2)
+        if 0 < app.player.x <= app.width - app.spellSize and 0 < app.player.y <= app.height:
+            movePlayer(app, app.cx2, app.cy2)
+        else:
+            app.player.teleport(app.cx2, app.cy2)
         app.data = []
     if len(app.data) >= 5: 
         x1, y1 = app.data[-1]
         x2, y2 = app.data[-2]
         if distance(x1, y1, x2, y2) < 5:
             if app.record:
-                recordData(app, "♥")
+                recordData(app, "▶")
             else:
                 gesture = predictGesture(app)
                 perfromSpells(app, gesture)
@@ -449,11 +513,40 @@ def doStep(app):
 
     app.timer += 1
 
+def doMenuStep(app):
+    getCoodinates(app)
+    if app.width-app.spellSize < app.cx < app.width and 0 < app.cy < app.height:
+        app.data.append((app.cx, app.cy))
+    elif app.width-app.spellSize < app.cx2 < app.width and 0 < app.cy2 < app.height:
+        app.data.append((app.cx2, app.cy2))
+    else:
+        app.data = []
+    if len(app.data) >= 5: 
+        x1, y1 = app.data[-1]
+        x2, y2 = app.data[-2]
+        if distance(x1, y1, x2, y2) < 5:
+            if app.record:
+                recordData(app, "▶")
+            else:
+                gesture = predictGesture(app)
+                perfromSpells(app, gesture)
+                app.data = []
+    elif len(app.data) >= 20:
+        app.data = []
+    elif len(app.data) == 2:
+        x1, y1 = app.data[0]
+        x2, y2 = app.data[1]
+        if distance(x1, y1, x2, y2) < 10:
+            app.data = []
+
 # Perform step of the game when timer is fired
 def timerFired(app):
-    if app.paused or app.gameOver or not app.gameStarted:
+    if app.paused or app.gameOver:
         return
-    doStep(app)
+    if app.gameStarted:
+        doGameStep(app)
+    else:
+        doMenuStep(app)
 
 # Draws a trail behind the hand cursor by connecting lines between previous hand locs
 def drawTrail(app, canvas):
@@ -475,14 +568,6 @@ def drawEnemies(app, canvas):
         gesturesString = ""
         for gesture in enemy.gestures:
             gesturesString += gesture[0] + " "
-            #if gesture == "—":
-            #    gesturesString += "— "
-            #elif gesture == "|":
-            #    gesturesString += " "
-            #elif gesture == "u":
-            #    gesturesString += "u "
-            #elif gesture == "n":
-            #    gesturesString += "n "
         gesturesString = gesturesString[:-1]
         canvas.create_text(enemy.x, enemy.y-enemy.radius-15, text = gesturesString, fill = "orange", font = "Arial 16 bold")
 
@@ -491,36 +576,34 @@ def drawPlayer(app, canvas):
     sprite = app.curMotion[app.motionCounter % len(app.curMotion)]
     #canvas.create_oval(app.player.x-app.player.radius, app.player.y-app.player.radius, app.player.x+app.player.radius, app.player.y+app.player.radius, fill = app.player.color)
     canvas.create_image(app.player.x-5, app.player.y, image=ImageTk.PhotoImage(sprite))
-    canvas.create_text(app.player.x, app.player.y-app.player.radius-10, text = str(app.player.health))
+    canvas.create_text(app.player.x, app.player.y-app.player.radius-10, fill = "orange", text = str(app.player.health))
 
 # Draws the main menu
 def drawCover(app, canvas):
-    canvas.create_image(app.width/2, app.height/2, image=ImageTk.PhotoImage(app.cover))
-    canvas.create_text(app.width/2, 10, text = "Magic Axolotl Academy", anchor = "n", font = "Arial 40 bold")
-    canvas.create_rectangle(3*app.width/5, app.height/4, 3*app.width/5 + 300, app.height/4 + 100, fill = "aqua")
-
+    canvas.create_image(app.width/2-app.spellSize/2, app.height/2, image=ImageTk.PhotoImage(app.cover))
+    canvas.create_text(app.width/2-app.spellSize/2, 10, text = "Magic Axolotl Academy", anchor = "n", font = "Arial 40 bold")
+    #canvas.create_rectangle(3*app.width/5-app.spellSize/2, app.height/4, 3*app.width/5 + 300 - app.spellSize/2, app.height/4 + 100, fill = "orange")
 # Redraws all
 def redrawAll(app, canvas):
     if app.gameStarted:
-        canvas.create_image(app.width/2, app.height/2, image=ImageTk.PhotoImage(app.background))
-        #canvas.create_rectangle(app.width-600, 0, app.width, app.height, fill = app.color)
-        canvas.create_oval(app.cx-10, app.cy-10, app.cx+10, app.cy+10)
-        canvas.create_oval(app.cx2-10, app.cy2-10, app.cx2+10, app.cy2+10)
-        drawPlayer(app, canvas)
-        drawEnemies(app, canvas)
-        drawTrail(app, canvas)
-        canvas.create_text(app.width/2, 10, text = f"({app.cx}, {app.cy}) ({app.cx2}, {app.cy2})")
-        if app.gameOver:
-            canvas.create_text(app.width/2, app.height/2, text = "Game Over", font = "Arial 30 bold")
-        #canvas.create_oval(app.cx, app.cy, app.cx2, app.cy2, fill = '', outline="black", width=5)
+        canvas.create_image(app.width/2-app.spellSize/2, app.height/2, image=ImageTk.PhotoImage(app.background))
         for row in range(app.rows):
             for col in range(app.cols):
                 (x0, y0, x1, y1) = getCellBounds(app, row, col)
                 fill = ""
                 if app.walls[row][col]:
                     fill = "black"
-                canvas.create_rectangle(x0, y0, x1, y1, fill=fill)
+                canvas.create_rectangle(x0, y0, x1, y1, fill=fill, outline = "")
+        drawPlayer(app, canvas)
+        drawEnemies(app, canvas)
+        canvas.create_text(app.width/2, 10, text = f"({app.cx}, {app.cy}) ({app.cx2}, {app.cy2})")
+        if app.gameOver:
+            canvas.create_text(app.width/2, app.height/2, text = "Game Over", fill = "orange", font = "Arial 60 bold")
     else:
         drawCover(app, canvas)
+    canvas.create_rectangle(app.width-app.spellSize, 0, app.width, app.height, fill = app.color)
+    canvas.create_oval(app.cx-10, app.cy-10, app.cx+10, app.cy+10, outline = "orange", width = 3)
+    canvas.create_oval(app.cx2-10, app.cy2-10, app.cx2+10, app.cy2+10, outline = "orange", width = 3)
+    drawTrail(app, canvas)
 
-runApp(width=1280, height=960)
+runApp(width=1280+600, height=960)
