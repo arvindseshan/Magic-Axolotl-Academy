@@ -22,15 +22,12 @@ cv2.namedWindow('vid')
 
 # Inspiration for trackerbars: https://www.tutscode.net/2020/04/color-detection-with-python-and-opencv.html
 # Create sliders for HSV min and max for adjusting to object color
-
-'''
 cv2.createTrackbar('hMin', 'vid', 90, 179, whenTrackerbarChanged)
 cv2.createTrackbar('hMax', 'vid', 162, 179, whenTrackerbarChanged)
 cv2.createTrackbar('sMin', 'vid', 45, 255, whenTrackerbarChanged)
 cv2.createTrackbar('sMax', 'vid', 251, 255, whenTrackerbarChanged)
 cv2.createTrackbar('vMin', 'vid', 133, 255, whenTrackerbarChanged)
 cv2.createTrackbar('vMax', 'vid', 255, 255, whenTrackerbarChanged)
-'''
 
 def getCoodinates(app):
     worked, vid = cap.read()
@@ -38,22 +35,22 @@ def getCoodinates(app):
         return
     # Convert from BGR to HSV color
     hsv = cv2.cvtColor(vid, cv2.COLOR_BGR2HSV)
-    '''
+
     hMin = cv2.getTrackbarPos('hMin', 'vid')
     hMax = cv2.getTrackbarPos('hMax', 'vid')
     sMin = cv2.getTrackbarPos('sMin', 'vid')
     sMax = cv2.getTrackbarPos('sMax', 'vid')
     vMin = cv2.getTrackbarPos('vMin', 'vid')
     vMax = cv2.getTrackbarPos('vMax', 'vid')
-    '''
     
-    hMin = 90
-    hMax = 162
-    sMin = 45
-    sMax = 251
-    vMin = 133
-    vMax = 255
-    # Adjust the min and max color range based on the hsv sliders
+    #hMin = 90
+    #hMax = 162
+    #sMin = 45
+    #sMax = 251
+    #vMin = 133
+    #vMax = 255
+
+    # Adjust the min and max color range based on the hsv values
     colorMin = np.array([hMin, sMin, vMin])
     colorMax = np.array([hMax, sMax, vMax])
 
@@ -151,12 +148,13 @@ class Player(object):
         self.health += health
     def dir(self, dir):
         self.direction = dir
+
 # Returns distance between two points
 def distance(x1, y1, x2, y2):
     return ((x2-x1)**2 + (y2-y1)**2)**0.5
 
 
-# Pseudocode for BFS algorithm from 15-112 Graphs/AI lesson slides
+# Source: Pseudocode for BFS algorithm from 15-112 Graphs/AI lesson slides
 # Finds shortest path between two cells
 def findShortestPath(startRow, startCol, endRow, endCol, rows, cols, walls):
     found = False
@@ -191,6 +189,7 @@ def findShortestPath(startRow, startCol, endRow, endCol, rows, cols, walls):
     else:
         return []
 
+# Get the cell at a given x,y coord
 def getCell(app, x, y):
     cellWidth = (app.width-app.spellSize) / app.cols
     cellHeight = (app.height) / app.rows
@@ -198,6 +197,7 @@ def getCell(app, x, y):
     col = int(x // cellWidth)
     return row, col
 
+# Gets the top left and bottom right coords for a cell
 def getCellBounds(app, row, col):
     cellWidth = (app.width-app.spellSize) / app.cols
     cellHeight = app.height / app.rows
@@ -207,12 +207,7 @@ def getCellBounds(app, row, col):
     y2 = y1 + cellHeight
     return x1, y1, x2, y2
 
-def getCellCenter(app, row, col):
-    x1, y1, x2, y2 = getCellBounds(app, row, col)
-    x = x1 + (x2-x1)/2
-    y = y1 + (y2-y1)/2
-    return x, y
-
+# Returns the shortest path around walls to the player from an x,y coord
 def shortestPathToPlayer(app, x, y):
     startRow, startCol = getCell(app, x, y)
     endRow, endCol = getCell(app, app.player.x, app.player.y)
@@ -242,6 +237,7 @@ def moveEnemy(app, enemy):
             if app.player.health <= 0:
                 app.gameOver = True
 
+# Moves the player towards hand, avoiding walls
 def movePlayer(app, x, y):
     cellWidth = (app.width-app.spellSize) / app.cols
     cellHeight = app.height / app.rows
@@ -258,7 +254,6 @@ def movePlayer(app, x, y):
         else:
             app.player.dir(-1)
         app.player.move(dx, dy)
-
 
 # Creates a new Enemy object with randomized stats and start loc
 def makeEnemy(app):
@@ -278,6 +273,7 @@ def makeEnemy(app):
     radius = min(health * 2.5 + 15, 30)
     app.enemies.append(Enemy(health, speed, radius, x, y, random.randint(app.player.health, 8) < 5, dir))
 
+# Counts number of neighboring cells with walls
 def countNeighbors(app, row, col):
     neighbors = 0
     for dRow in [-1, 0, 1]:
@@ -289,7 +285,8 @@ def countNeighbors(app, row, col):
     neighbors -= 1
     return neighbors
 
-# Concept (description) for random cave generation from http://pixelenvy.ca/wa/ca_cave.html (4-5 rule) modified for wall generation
+# Source: Concept (description) for random cave generation from http://pixelenvy.ca/wa/ca_cave.html (4-5 rule) modified for wall generation
+# Makes natural looking walls with cellular automata model
 def makeWalls(app, empty, passes):
     app.walls = [[False]*app.cols for i in range(app.rows)]
     for row in range(1, app.rows-1):
@@ -350,6 +347,7 @@ def appStarted(app):
         for i in range(8):
             sprite = smogSpriteSheet.crop((128*i, 120*j, 128*(i+1), 120*(j+1)))
             app.smogMotion.append(sprite)
+    # Image Source: https://www.seekpng.com/ipng/u2q8q8i1u2t4q8i1_animation-sprite-electric-blue-lightning-game-lightning-animation/
     lightningSpriteSheet = app.loadImage("lightningSprite.png")
     app.lightningMotion = []
     app.lightningMotion.append(lightningSpriteSheet.crop((15, 0, 335, 675)))
@@ -382,26 +380,27 @@ def appStarted(app):
     # Source for loading scaler: https://machinelearningmastery.com/how-to-save-and-load-models-and-data-preparation-in-scikit-learn-for-later-use/
     app.scaler = load(open('scaler.pkl', 'rb'))
 
-# Records data from training when f key pressed
+# Records data for training when f key pressed
 # Pauses game with p and steps with s for debugging
 def keyPressed(app ,event):
     if event.key == 'r':
         appStarted(app)
     if event.key == 's':
-        app.countdown = True
-        app.time = time.time()
+        if app.gameStarted and app.paused and not app.gameOver:
+            doGameStep(app)
+        else:
+            app.countdown = True
+            app.time = time.time()
     elif event.key == 'f':
         app.record = not app.record
     elif not app.gameStarted:
         return
     elif event.key == 'p':
         app.paused = not app.paused
-    elif app.paused and not app.gameOver and event.key == 's':
-        doGameStep(app)
     elif event.key == 'w':
         app.addWalls = not app.addWalls
 
-# Temp function to manually add walls to the game
+# Temp function to manually add walls to the game for testing
 def mousePressed(app, event):
     (row, col) = getCell(app, event.x, event.y)
     if app.addWalls:
@@ -460,7 +459,7 @@ def predictGesture(app):
     app.color = app.spellColor[gesture]
     return gesture
 
-# Makes enemies take damage and heals players based on the gesture
+# Makes enemies take damage, heals player, or starts game based on the gesture
 def performSpells(app, gesture):
     app.lightning = False
     if not app.countdown and not app.gameStarted and gesture == "⚡":
@@ -562,6 +561,8 @@ def doGameStep(app):
 
     app.timer += 1
 
+# Perform a step of the main menu to keep track of hand locations, and perfrom
+# gesture recognition to see if the game has started/collect data for training
 def doMenuStep(app):
     getCoodinates(app)
     if app.width-app.spellSize < app.cx < app.width and 0 < app.cy < app.height:
@@ -653,13 +654,14 @@ Press r to restart the game
     canvas.create_text((app.width-app.spellSize)/2, 95, text = "How To Play", anchor = "n", font = "Arial 16 bold")       
     for i in range(len(howToPlay)):
         canvas.create_text((app.width-app.spellSize)/2, 105+i*25, text = howToPlay[i], anchor = "n", font = "Arial 14")
-    #canvas.create_rectangle(3*app.width/5-app.spellSize/2, app.height/4, 3*app.width/5 + 300 - app.spellSize/2, app.height/4 + 100, fill = "orange")
 
+# Draws the score and health
 def drawGameInfo(app, canvas):
     canvas.create_text(10, 10, anchor = "nw", text = f"Score: {max(0, app.score)}", fill = "orange", font = "Arial 20 bold")
     canvas.create_text(app.width-app.spellSize-10, 10, anchor = "ne", text = "♥ "*app.player.health, fill = "red", font = "Arial 20 bold")
     #canvas.create_text(app.width/2, 10, text = f"({app.cx}, {app.cy}) ({app.cx2}, {app.cy2})")
 
+# Draws the walls in the game
 def drawWalls(app, canvas):
     for row in range(app.rows):
             for col in range(app.cols):
@@ -669,6 +671,7 @@ def drawWalls(app, canvas):
                     fill = "black"
                 canvas.create_rectangle(x0, y0, x1, y1, fill=fill, outline = "")
 
+# Draws the game starting countdown
 def drawCountdown(app, canvas):
     if app.countdown:
         if int(4 - (time.time()-app.time)) == 0:
@@ -676,10 +679,13 @@ def drawCountdown(app, canvas):
         else:
             canvas.create_text((app.width-app.spellSize)/2, app.height/2, text = str(int(4 - (time.time()-app.time))), fill = "orange", font = "Arial 60 bold")
 
+
+# Draws the area to cast spells
 def drawSpellZone(app, canvas):
     canvas.create_rectangle(app.width-app.spellSize, 0, app.width, app.height, fill = app.color)
     canvas.create_text(app.width-app.spellSize/2, 10, anchor = "n", text = f"Cast Your Spells Here", fill = "black", font = "Arial 20 bold")
 
+# Draws the cursor for each hand
 def drawHands(app, canvas):
     canvas.create_oval(app.cx-10, app.cy-10, app.cx+10, app.cy+10, outline = "orange", width = 3)
     canvas.create_oval(app.cx2-10, app.cy2-10, app.cx2+10, app.cy2+10, outline = "orange", width = 3)
