@@ -156,27 +156,34 @@ def distance(x1, y1, x2, y2):
 
 # Source: Pseudocode for BFS algorithm from 15-112 Graphs/AI lesson slides
 # Finds shortest path between two cells
-def findShortestPath(startRow, startCol, endRow, endCol, rows, cols, walls):
+def findShortestPath(app, startRow, startCol, endRow, endCol, rows, cols, walls, dists):
     found = False
     cellMap = {}
     visitedCells = set()
     unvisitedNeighborsQueue = [(startRow, startCol)]
+    cellDistance = [[0]*app.cols for i in range(app.rows)]
+    found = False
+    foundDist = 0
     while len(unvisitedNeighborsQueue) != 0:
         row, col = unvisitedNeighborsQueue[0]
         unvisitedNeighborsQueue.pop(0)
-        if (row, col) in visitedCells:
-            continue
-        else:
-            visitedCells.add((row, col))
+        visitedCells.add((row, col))
         if row == endRow and col == endCol:
             found = True
+            foundDist = cellDistance[row][col]
+        if found and cellDistance[row][col] - foundDist == 8:
             break
-        for dCol, dRow in [(-1, 0),(0, 1),(1, 0), (0, -1),(-1, -1),(1, 1),(-1, 1),(1, -1)]:
+        for dCol, dRow in [(-1, 0),(0, 1),(1, 0),(0, -1),(-1, -1),(1, 1),(-1, 1),(1, -1)]:
             newRow = row - dRow
             newCol = col - dCol
-            if 0 <= newRow < rows and 0 <= newCol < cols and (newRow, newCol) not in visitedCells and not walls[newRow][newCol]:
+            if 0 <= newRow < rows and 0 <= newCol < cols and (newRow, newCol) not in visitedCells and (newRow, newCol) not in unvisitedNeighborsQueue and not walls[newRow][newCol]:
+                if dists:
+                    cellDistance[newRow][newCol] = cellDistance[row][col] + 1
+                    app.cellDistances[newRow][newCol] += cellDistance[newRow][newCol]
                 unvisitedNeighborsQueue.append((newRow, newCol))
-                cellMap[(newRow, newCol)] = cellMap.get((newRow, newCol), (row, col))
+                if not found:
+                    cellMap[(newRow, newCol)] = cellMap.get((newRow, newCol), (row, col))
+
     if found:
         result = (endRow, endCol)
         path = []
@@ -211,13 +218,14 @@ def getCellBounds(app, row, col):
 def shortestPathToPlayer(app, x, y):
     startRow, startCol = getCell(app, x, y)
     endRow, endCol = getCell(app, app.player.x, app.player.y)
-    return findShortestPath(startRow, startCol, endRow, endCol, app.rows, app.cols, app.walls)
+    return findShortestPath(app, startRow, startCol, endRow, endCol, app.rows, app.cols, app.walls, True)
 
 # Moves the enemy away or towards the player and checks for collision
 def moveEnemy(app, enemy):
     cellWidth = (app.width-app.spellSize) / app.cols
     cellHeight = app.height / app.rows
     path = shortestPathToPlayer(app, enemy.x, enemy.y)
+    app.enemiesPath += path
     if len(path) > 1:
         row1, col1 = path[0]
         row2, col2 = path[1]
@@ -242,14 +250,42 @@ def movePlayer(app, x, y):
     cellWidth = (app.width-app.spellSize) / app.cols
     cellHeight = app.height / app.rows
     startRow, startCol = getCell(app, app.player.x, app.player.y)
-    endRow, endCol = getCell(app, x, y)
-    path = findShortestPath(startRow, startCol, endRow, endCol, app.rows, app.cols, app.walls)
+    if app.autoMode:
+        if app.curMoveRow == startRow and app.curMoveCol == startCol:
+            maxDist = -1
+            maxRow = -1
+            maxCol = -1
+            for dRow in range(-10, 11):
+                for dCol in range(-10, 11):
+                    #if dRow == 0 and dCol == 0:
+                    #    continue
+                    endRow = startRow + dRow
+                    endCol = startCol + dCol
+                    if not 5 <= endRow < app.rows - 5 or not 5 <= endCol < app.cols - 5 or app.walls[endRow][endCol]:
+                        continue
+                    for enemy in app.enemies:
+                        cy = app.player.y + dRow*cellHeight
+                        cx = app.player.x + dCol*cellWidth
+                        if not isThroughWall(app, cx, cy, enemy.x, enemy.y):
+                            totalDist += 50
+                    totalDist = app.cellDistances[endRow][endCol]
+                    if totalDist > maxDist:
+                        maxDist = totalDist
+                        maxRow = endRow
+                        maxCol = endCol
+            app.curMoveRow = maxRow
+            app.curMoveCol = maxCol
+        path = findShortestPath(app, startRow, startCol, app.curMoveRow, app.curMoveCol, app.rows, app.cols, app.walls, False)
+    else:
+        endRow, endCol = getCell(app, x, y)
+        path = findShortestPath(app, startRow, startCol, endRow, endCol, app.rows, app.cols, app.walls, False)
+    app.playerPath += path
     if len(path) > 1:
         row1, col1 = path[0]
         row2, col2 = path[1]
-        dy = (row2 - row1) * cellWidth
-        dx = (col2 - col1) * cellHeight
-        if dx > 0:
+        dy = (row2 - row1) * cellHeight
+        dx = (col2 - col1) * cellWidth
+        if dx >= 0:
             app.player.dir(1)
         else:
             app.player.dir(-1)
@@ -258,11 +294,11 @@ def movePlayer(app, x, y):
 # Creates a new Enemy object with randomized stats and start loc
 def makeEnemy(app):
     if random.randint(0,1) == 0:
-        x = random.randint(0, app.width-app.spellSize)
-        y = random.choice([0, app.height])
+        x = random.randint(10, app.width-app.spellSize-10)
+        y = random.choice([10, app.height-10])
     else:
-        x = random.choice([0, app.width-app.spellSize])
-        y = random.randint(0, app.height)
+        x = random.choice([10, app.width-app.spellSize-10])
+        y = random.randint(10, app.height-10)
     if x > (app.width-app.spellSize)/2:
         dir = 1
     else:
@@ -307,12 +343,16 @@ def makeWalls(app, empty, passes):
 
 # Initilizes game
 def appStarted(app):
+    app.rows = 45
+    app.cols = 60
+    app.autoMode = False
+    app.testingMode = False
+    app.enemiesPath = []
+    app.playerPath = []
     app.gestureToTrain = "—"
     app.score = 0
     app.spellSize = 600
     app.spellColor = {"—":"DeepPink2", "|":"cyan", "u":"spring green", "n":"magenta3", "none":"pink", "⚡":"yellow", "♥":"red"}
-    app.rows = 45
-    app.cols = 60
     makeWalls(app, 40, 20)
     app.countdown = False
     app.gameStarted = False
@@ -372,6 +412,7 @@ def appStarted(app):
     app.enemies = []
     app.addWalls = False
     app.player = Player(5, 45, "brown",(app.width-app.spellSize)/2, app.height/2, 1)
+    app.cellDistances = [[-1]*app.cols for i in range(app.rows)]
     while shortestPathToPlayer(app, 0, 0) == []:
         app.player = Player(5, 45, "brown", random.randint(0, app.width-app.spellSize), random.randint(0, app.height), 1)
     # Model and scaler for gesture recognition
@@ -388,17 +429,22 @@ def keyPressed(app ,event):
     if event.key == 's':
         if app.gameStarted and app.paused and not app.gameOver:
             doGameStep(app)
-        else:
+        elif not app.gameStarted and not app.gameOver:
             app.countdown = True
             app.time = time.time()
     elif event.key == 'f':
         app.record = not app.record
-    elif not app.gameStarted:
+    elif not app.gameStarted or app.gameOver:
         return
     elif event.key == 'p':
         app.paused = not app.paused
     elif event.key == 'w':
         app.addWalls = not app.addWalls
+    elif event.key == 't':
+        app.testingMode = not app.testingMode
+    elif event.key == 'a':
+        app.autoMode = not app.autoMode
+        app.curMoveRow, app.curMoveCol = getCell(app, app.player.x, app.player.y)
 
 # Temp function to manually add walls to the game for testing
 def mousePressed(app, event):
@@ -459,6 +505,47 @@ def predictGesture(app):
     app.color = app.spellColor[gesture]
     return gesture
 
+# Function for displaying/testing line of sight
+def isThroughWallDisplay(app, x1, y1, x2, y2):
+    dx = int(x2-x1)
+    dy = int(y2-y1)
+    if dx == 0:
+        dx += 1
+    if dy == 0:
+        dy += 1
+    slope = dy/dx
+    for x in range(0, dx, int(abs(dx)/dx)):
+        y = x*slope + y1
+        row, col = getCell(app, x+x1, y)
+        if app.walls[row][col]:
+            return x+x1, y
+    for y in range(0, dy, int(abs(dy)/dy)):
+        x = y*(1/slope) + x1
+        row, col = getCell(app, x, y+y1)
+        if app.walls[row][col]:
+            return x, y+y1
+    return -1, -1
+
+def isThroughWall(app, x1, y1, x2, y2):
+    dx = int(x2-x1)
+    dy = int(y2-y1)
+    if dx == 0:
+        dx += 1
+    if dy == 0:
+        dy += 1
+    slope = dy/dx
+    for x in range(0, dx, int(abs(dx)/dx)):
+        y = x*slope + y1
+        row, col = getCell(app, x+x1, y)
+        if app.walls[row][col]:
+            return True
+    for y in range(0, dy, int(abs(dy)/dy)):
+        x = y*(1/slope) + x1
+        row, col = getCell(app, x, y+y1)
+        if app.walls[row][col]:
+            return True
+    return False
+
 # Makes enemies take damage, heals player, or starts game based on the gesture
 def performSpells(app, gesture):
     app.lightning = False
@@ -474,6 +561,8 @@ def performSpells(app, gesture):
         if enemy.gestures[0] == gesture or app.lightning:
             if gesture == "♥":
                 app.player.healPlayer(1)
+            if gesture != "⚡" and isThroughWall(app, app.player.x, app.player.y, enemy.x, enemy.y):
+                continue
             enemy.damageEnemy(1)
             app.score += 50
             if enemy.health <= 0:
@@ -514,6 +603,8 @@ def doGameStep(app):
     app.motionCounter += 1
     app.smCounter += 1
     if not app.record:
+        app.enemiesPath = []
+        app.cellDistances = [[-1]*app.cols for i in range(app.rows)]
         for enemy in app.enemies:
             moveEnemy(app, enemy)
         if app.timer % 40 == 0:
@@ -523,6 +614,7 @@ def doGameStep(app):
         if app.lightning and app.smCounter >= 4:
             app.lightning = False
     getCoodinates(app)
+    app.playerPath = []
     if app.width-app.spellSize < app.cx < app.width and 0 < app.cy < app.height:
         app.data.append((app.cx, app.cy))
         if 0 < app.player.x <= app.width - app.spellSize and 0 < app.player.y <= app.height:
@@ -626,6 +718,14 @@ def drawEnemies(app, canvas):
         if app.lightning:
             sprite = app.lightningMotion[app.smCounter % len(app.lightningMotion)]
             canvas.create_image(enemy.x, enemy.y-75, image=ImageTk.PhotoImage(sprite))
+        if app.testingMode:
+            blockingX, blockingY = isThroughWallDisplay(app, app.player.x, app.player.y, enemy.x, enemy.y)
+            if blockingX == -1 and blockingY == -1:
+                canvas.create_line(app.player.x, app.player.y, enemy.x, enemy.y, fill = "green", width = 4)
+            else:
+                canvas.create_line(app.player.x, app.player.y, blockingX, blockingY, fill = "red", width = 4)
+                canvas.create_line(blockingX, blockingY, enemy.x, enemy.y, fill = "red", width = 1)
+                canvas.create_oval(blockingX - 10, blockingY - 10, blockingX + 10, blockingY + 10, fill = "red")
 
 # Draws the player (axolotl)
 def drawPlayer(app, canvas):
@@ -643,11 +743,15 @@ def drawCover(app, canvas):
     canvas.create_image((app.width-app.spellSize)/2, app.height/2, image=ImageTk.PhotoImage(app.cover))
     canvas.create_text((app.width-app.spellSize)/2, 10, text = "Magic Axolotl Academy", anchor = "n", font = "Arial 40 bold")
     howToPlay = """
-Left hand to move axolotl
+——————————————————————————
+Left hand to move axolotl or press a to move automatically
 Right hand to cast spells (—, |, u, n, ⚡, and ♥)
 Lighting damages all smog monsters in view
 Casting a heart earns a life
 To start playing the game, cast a lightning bolt
+Press p to pause the game
+Press s to step when paused
+Press t for testing mode
 Press r to restart the game
 """
     howToPlay = howToPlay.splitlines()   
@@ -661,15 +765,25 @@ def drawGameInfo(app, canvas):
     canvas.create_text(app.width-app.spellSize-10, 10, anchor = "ne", text = "♥ "*app.player.health, fill = "red", font = "Arial 20 bold")
     #canvas.create_text(app.width/2, 10, text = f"({app.cx}, {app.cy}) ({app.cx2}, {app.cy2})")
 
-# Draws the walls in the game
-def drawWalls(app, canvas):
+# Draws the cells/walls in the game
+def drawCells(app, canvas):
     for row in range(app.rows):
             for col in range(app.cols):
                 (x0, y0, x1, y1) = getCellBounds(app, row, col)
                 fill = ""
+                if app.testingMode:
+                    if (row, col) in app.enemiesPath:
+                        fill = "orange"
+                    elif (row, col) in app.playerPath:
+                        fill = "blue"
                 if app.walls[row][col]:
                     fill = "black"
-                canvas.create_rectangle(x0, y0, x1, y1, fill=fill, outline = "")
+                if app.testingMode:
+                    canvas.create_rectangle(x0, y0, x1, y1, fill=fill)
+                    if fill != "black":
+                        canvas.create_text((x1-x0)/2+x0, (y1-y0)/2+y0, text = str(app.cellDistances[row][col]), font = "Arial 8")
+                else:
+                    canvas.create_rectangle(x0, y0, x1, y1, fill=fill, outline = "")
 
 # Draws the game starting countdown
 def drawCountdown(app, canvas):
@@ -678,7 +792,6 @@ def drawCountdown(app, canvas):
             canvas.create_text((app.width-app.spellSize)/2, app.height/2, text = "Cast!", fill = "orange", font = "Arial 60 bold")
         else:
             canvas.create_text((app.width-app.spellSize)/2, app.height/2, text = str(int(4 - (time.time()-app.time))), fill = "orange", font = "Arial 60 bold")
-
 
 # Draws the area to cast spells
 def drawSpellZone(app, canvas):
@@ -698,7 +811,7 @@ def redrawAll(app, canvas):
     drawTrail(app, canvas)
     drawCountdown(app, canvas)
     if app.gameStarted:
-        drawWalls(app, canvas)
+        drawCells(app, canvas)
         drawPlayer(app, canvas)
         drawEnemies(app, canvas)
         drawGameInfo(app, canvas)
