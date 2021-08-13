@@ -10,9 +10,8 @@ from pickle import load
 import random
 import time
 
-def whenTrackerbarChanged(value):
-    pass
-
+# OpenCV hand tracking code
+######################################################
 # Gets video from the camera
 cap = cv2.VideoCapture(0)
 cap.set(3, 640)
@@ -21,17 +20,18 @@ cap.set(4, 480)
 # Creates a window called vid to display the video and slider bars defined below
 cv2.namedWindow('vid')
 
+# Placeholder function for trakcerbars
+def whenTrackerbarChanged(value):
+    pass
+
 # Inspiration for trackerbars: https://www.tutscode.net/2020/04/color-detection-with-python-and-opencv.html
 # Create sliders for HSV min and max for adjusting to object color
-
-'''
 cv2.createTrackbar('hMin', 'vid', 90, 179, whenTrackerbarChanged)
 cv2.createTrackbar('hMax', 'vid', 162, 179, whenTrackerbarChanged)
 cv2.createTrackbar('sMin', 'vid', 45, 255, whenTrackerbarChanged)
 cv2.createTrackbar('sMax', 'vid', 251, 255, whenTrackerbarChanged)
 cv2.createTrackbar('vMin', 'vid', 133, 255, whenTrackerbarChanged)
 cv2.createTrackbar('vMax', 'vid', 255, 255, whenTrackerbarChanged)
-'''
 
 # Determines the coordinates of the center of each hand
 def getCoodinates(app):
@@ -40,20 +40,20 @@ def getCoodinates(app):
         return
     # Convert from BGR to HSV color
     hsv = cv2.cvtColor(vid, cv2.COLOR_BGR2HSV)
-    '''
+    
     hMin = cv2.getTrackbarPos('hMin', 'vid')
     hMax = cv2.getTrackbarPos('hMax', 'vid')
     sMin = cv2.getTrackbarPos('sMin', 'vid')
     sMax = cv2.getTrackbarPos('sMax', 'vid')
     vMin = cv2.getTrackbarPos('vMin', 'vid')
     vMax = cv2.getTrackbarPos('vMax', 'vid')
-    '''
-    hMin = 90
-    hMax = 162
-    sMin = 45
-    sMax = 251
-    vMin = 133
-    vMax = 255
+    
+    #hMin = 90
+    #hMax = 162
+    #sMin = 45
+    #sMax = 251
+    #vMin = 133
+    #vMax = 255
 
     # Adjust the min and max color range based on the hsv values
     colorMin = np.array([hMin, sMin, vMin])
@@ -89,15 +89,15 @@ def getCoodinates(app):
             # plots center and contours on vid window
             cv2.circle(vid, (cx, cy), 10, color, -1)
             cv2.drawContours(vid, cnts, i, color, maxLevel=0)
-  
 
     cv2.imshow("vid", vid)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         return
-
 ######################################################
 
+# Class definitions
+######################################################
 # Enemy Class
 class Enemy(object):
     colors = ["magenta", "yellow", "gray"]
@@ -153,13 +153,36 @@ class Player(object):
         self.health += health
     def dir(self, dir):
         self.direction = dir
+######################################################
 
+# General helper functions
+######################################################
 # Returns distance between two points
 def distance(x1, y1, x2, y2):
     return ((x2-x1)**2 + (y2-y1)**2)**0.5
 
+# Get the cell at a given x,y coord
+def getCell(app, x, y):
+    cellWidth = (app.width-app.spellSize) / app.cols
+    cellHeight = (app.height) / app.rows
+    row = int(y // cellHeight)
+    col = int(x // cellWidth)
+    return row, col
 
-# Source: Pseudocode for BFS algorithm from 15-112 Graphs/AI lesson slides
+# Gets the top left and bottom right coords for a cell
+def getCellBounds(app, row, col):
+    cellWidth = (app.width-app.spellSize) / app.cols
+    cellHeight = app.height / app.rows
+    x1 = col * cellWidth
+    x2 = x1 + cellWidth
+    y1 = row * cellHeight
+    y2 = y1 + cellHeight
+    return x1, y1, x2, y2
+######################################################
+
+# Movement helper funcions
+######################################################
+# Source: Pseudocode for BFS algorithm from 15-112 Graphs/AI lesson slides modified for recording cell scores (cellDistances variable)
 # Finds shortest path between two cells
 def findShortestPath(app, startRow, startCol, endRow, endCol, rows, cols, walls, dists):
     found = False
@@ -182,7 +205,10 @@ def findShortestPath(app, startRow, startCol, endRow, endCol, rows, cols, walls,
         for dCol, dRow in [(-1, 0),(0, 1),(1, 0),(0, -1),(-1, -1),(1, 1),(-1, 1),(1, -1)]:
             newRow = row - dRow
             newCol = col - dCol
-            if 0 <= newRow < rows and 0 <= newCol < cols and (newRow, newCol) not in visitedCells and (newRow, newCol) not in unvisitedNeighborsQueue and not walls[newRow][newCol]:
+            if (0 <= newRow < rows and 0 <= newCol < cols
+                and (newRow, newCol) not in visitedCells
+                and (newRow, newCol) not in unvisitedNeighborsQueue
+                and not walls[newRow][newCol]):
                 if dists:
                     if cellDistance[row][col] == -89:
                         cellDistance[newRow][newCol] = cellDistance[row][col] + 101
@@ -204,29 +230,13 @@ def findShortestPath(app, startRow, startCol, endRow, endCol, rows, cols, walls,
     else:
         return []
 
-# Get the cell at a given x,y coord
-def getCell(app, x, y):
-    cellWidth = (app.width-app.spellSize) / app.cols
-    cellHeight = (app.height) / app.rows
-    row = int(y // cellHeight)
-    col = int(x // cellWidth)
-    return row, col
-
-# Gets the top left and bottom right coords for a cell
-def getCellBounds(app, row, col):
-    cellWidth = (app.width-app.spellSize) / app.cols
-    cellHeight = app.height / app.rows
-    x1 = col * cellWidth
-    x2 = x1 + cellWidth
-    y1 = row * cellHeight
-    y2 = y1 + cellHeight
-    return x1, y1, x2, y2
-
 # Returns the shortest path around walls to the player from an x,y coord
 def shortestPathToPlayer(app, x, y):
     startRow, startCol = getCell(app, x, y)
     endRow, endCol = getCell(app, app.player.x, app.player.y)
-    return findShortestPath(app, startRow, startCol, endRow, endCol, app.rows, app.cols, app.walls, True)
+    path =  findShortestPath(app, startRow, startCol, endRow, endCol, app.rows,
+                            app.cols, app.walls, True)
+    return path
 
 # Moves the enemy away or towards the player and checks for collision
 def moveEnemy(app, enemy):
@@ -260,23 +270,23 @@ def movePlayer(app, x, y):
     cellHeight = app.height / app.rows
     startRow, startCol = getCell(app, app.player.x, app.player.y)
     if app.autoMode:
-        #if app.curMoveRow == startRow and app.curMoveCol == startCol:
         maxDist = -1
         maxRow = -1
         maxCol = -1
         for dRow in range(-10, 11, 2):
             for dCol in range(-10, 11, 2):
-                #if dRow == 0 and dCol == 0:
-                #    continue
                 totalDist = 0
                 endRow = startRow + dRow
                 endCol = startCol + dCol
-                if not 2 <= endRow < app.rows - 2 or not 2 <= endCol < app.cols - 2 or app.walls[endRow][endCol]:
+                if (not 2 <= endRow < app.rows - 2
+                    or not 2 <= endCol < app.cols - 2
+                    or app.walls[endRow][endCol]):
                     continue
                 for enemy in app.enemies:
                     cy = app.player.y + dRow*cellHeight
                     cx = app.player.x + dCol*cellWidth
-                    if isThroughWall(app, cx, cy, enemy.x, enemy.y) == (-1, -1) and app.cellDistances[endRow][endCol] > 0:
+                    if (isThroughWall(app, cx, cy, enemy.x, enemy.y) == (-1, -1)
+                        and app.cellDistances[endRow][endCol] > 0):
                         app.cellDistances[endRow][endCol] *= 2
                 totalDist += app.cellDistances[endRow][endCol]
                 if totalDist > maxDist:
@@ -285,10 +295,13 @@ def movePlayer(app, x, y):
                     maxCol = endCol
         app.curMoveRow = maxRow
         app.curMoveCol = maxCol
-        path = findShortestPath(app, startRow, startCol, app.curMoveRow, app.curMoveCol, app.rows, app.cols, app.walls, False)
+        path = findShortestPath(app, startRow, startCol, app.curMoveRow,
+                                app.curMoveCol, app.rows, app.cols, app.walls,
+                                False)
     else:
         endRow, endCol = getCell(app, x, y)
-        path = findShortestPath(app, startRow, startCol, endRow, endCol, app.rows, app.cols, app.walls, False)
+        path = findShortestPath(app, startRow, startCol, endRow, endCol,
+                                app.rows, app.cols, app.walls, False)
     app.playerPath += path
     if len(path) > 1:
         row1, col1 = path[0]
@@ -300,7 +313,10 @@ def movePlayer(app, x, y):
         else:
             app.player.dir(-1)
         app.player.move(dx, dy)
+######################################################
 
+# Element creation helper functions
+######################################################
 # Creates a new Enemy object with randomized stats and start loc
 def makeEnemy(app):
     if random.randint(0,1) == 0:
@@ -317,7 +333,8 @@ def makeEnemy(app):
     health = random.randint(1, min(10, level))
     speed = (min(10, level) - health + 1)
     radius = min(health * 2.5 + 15, 30)
-    app.enemies.append(Enemy(health, speed, radius, x, y, random.randint(app.player.health, 8) < 5, dir))
+    app.enemies.append(Enemy(health, speed, radius, x, y,
+                        random.randint(app.player.health, 8) < 5, dir))
 
 # Counts number of neighboring cells with walls
 def countNeighbors(app, row, col):
@@ -350,120 +367,10 @@ def makeWalls(app, empty, passes):
                 else:
                     newWalls[row][col] = app.walls[row][col]
         app.walls = newWalls
+######################################################
 
-# Initilizes game
-def appStarted(app):
-    app.rows = 45
-    app.cols = 60
-    app.autoMode = False
-    app.testingMode = False
-    app.enemiesPath = []
-    app.playerPath = []
-    app.score = 0
-    app.spellSize = 600
-    app.spellColor = {"—":"DeepPink2", "|":"cyan", "u":"spring green", "n":"magenta3", "none":"pink", "⚡":"yellow", "♥":"red"}
-    makeWalls(app,45, 20)
-    app.countdown = False
-    app.gameStarted = False
-    app.gameOver = False
-    # Hand locations
-    app.cx = app.width/2 - app.spellSize/2
-    app.cy = app.height/2
-    app.cx2 = app.width/2 - app.spellSize/2
-    app.cy2 = app.height/2
-    timerDelay = 0
-    # Sprites and images
-    # Image Source: https://wallpapersafari.com/w/qofi3X
-    app.background = app.loadImage("underwaterBackground.jpg")
-    app.background = app.scaleImage(app.background, 1.25)
-    # Image credits: canva.com
-    app.cover = app.loadImage("cover.png")
-    # Image Source: https://spelunky.fyi/mods/m/axolotl-spelunker/
-    axolotlSpriteSheet = app.loadImage("axolotlSprite.png")
-    app.deadAxolotl = axolotlSpriteSheet.crop((1150, 0, 1290, 150))
-    app.generalMotion = []
-    for i in range(5):
-        sprite = axolotlSpriteSheet.crop((130*i, 170, 130*(i+1), 260))
-        app.generalMotion.append(sprite)
-    app.damagedMotion = []
-    for i in range(11):
-        sprite = axolotlSpriteSheet.crop((128*i, 520, 128*(i+1), 650))
-        app.damagedMotion.append(sprite)
-    # Image Source: https://www.pngjoy.com/preview/c9y7j3g3j2h7h0_sprite-2d-sprite-sheet-png-png-download/
-    smogSpriteSheet = app.loadImage("smogSprite.png")
-    app.smogMotion = []
-    for j in range(2):
-        for i in range(8):
-            sprite = smogSpriteSheet.crop((128*i, 120*j, 128*(i+1), 120*(j+1)))
-            app.smogMotion.append(sprite)
-    # Image Source: https://www.seekpng.com/ipng/u2q8q8i1u2t4q8i1_animation-sprite-electric-blue-lightning-game-lightning-animation/
-    lightningSpriteSheet = app.loadImage("lightningSprite.png")
-    app.lightningMotion = []
-    app.lightningMotion.append(lightningSpriteSheet.crop((15, 0, 335, 675)))
-    app.lightningMotion.append(lightningSpriteSheet.crop((745, 0, 1010, 675)))
-    app.lightningMotion.append(lightningSpriteSheet.crop((15, 695, 335, 1370)))
-    app.lightningMotion.append(lightningSpriteSheet.crop((745, 695, 1010, 1370)))
-    resized = []
-    for image in app.lightningMotion:
-        resized.append(app.scaleImage(image, 0.2))
-    app.lightningMotion = resized
-    app.lightning = False
-    app.motionCounter = 0
-    app.dmCounter = 0
-    app.smCounter = 0
-    app.curMotion = app.generalMotion
-    app.data = []
-    app.record = False
-    app.gestureToTrain = "♥"
-    app.buttonActive = False
-    app.color = "pink"
-    app.paused = False
-    app.timer  = 0
-    app.enemies = []
-    app.addWalls = False
-    app.player = Player(5, 45, "brown",(app.width-app.spellSize)/2, app.height/2, 1)
-    app.cellDistances = [[-1]*app.cols for i in range(app.rows)]
-    while shortestPathToPlayer(app, 0, 0) == []:
-        app.player = Player(5, 45, "brown", random.randint(0, app.width-app.spellSize), random.randint(0, app.height), 1)
-    # Model and scaler for gesture recognition
-    # Source for loading model: https://keras.io/api/models/model_saving_apis/#save_model-function
-    app.model = load_model("gestureRecognizer.h5")
-    # Source for loading scaler: https://machinelearningmastery.com/how-to-save-and-load-models-and-data-preparation-in-scikit-learn-for-later-use/
-    app.scaler = load(open('scaler.pkl', 'rb'))
-
-# Records data for training when f key pressed
-# Pauses game with p and steps with s for debugging
-def keyPressed(app ,event):
-    if event.key == 'r':
-        appStarted(app)
-    if event.key == 's':
-        if app.gameStarted and app.paused and not app.gameOver:
-            doGameStep(app)
-        elif not app.gameStarted and not app.gameOver:
-            app.countdown = True
-            app.time = time.time()
-    elif event.key == 'f':
-        app.record = not app.record
-    elif not app.gameStarted or app.gameOver:
-        return
-    elif event.key == 'p':
-        app.paused = not app.paused
-    elif event.key == 'w':
-        app.addWalls = not app.addWalls
-    elif event.key == 't':
-        app.testingMode = not app.testingMode
-    elif event.key == 'a':
-        app.autoMode = not app.autoMode
-        app.curMoveRow, app.curMoveCol = getCell(app, app.player.x, app.player.y)
-    elif event.key == 'g':
-        app.gameOver = True
-
-# Temp function to manually add walls to the game for testing
-def mousePressed(app, event):
-    (row, col) = getCell(app, event.x, event.y)
-    if app.addWalls:
-     app.walls[row][col] = not app.walls[row][col]
-
+# Spell performing helper functions (machine learning)
+######################################################
 # Creates list of slopes in hand pos list and inputs into model to predict gesture
 # Decides action based on gesture prediction
 def predictGesture(app):
@@ -553,7 +460,8 @@ def performSpells(app, gesture):
         if enemy.gestures[0] == gesture or app.lightning:
             if gesture == "♥":
                 app.player.healPlayer(1)
-            if gesture != "⚡" and isThroughWall(app, app.player.x, app.player.y, enemy.x, enemy.y) != (-1, -1):
+            if (gesture != "⚡"
+                and isThroughWall(app, app.player.x, app.player.y, enemy.x, enemy.y) != (-1, -1)):
                 continue
             enemy.damageEnemy(1)
             app.score += 50
@@ -587,7 +495,10 @@ def recordData(app, gesture):
     file.write(gesture)
     file.write("\n")
     app.data = [] 
+######################################################
 
+# Game Stepping Helper Functions
+######################################################
 # Perform a step of the game to move enemies, make enemies,
 # update animation counters, keep track of hand locations,
 # and perfrom gesture recognition
@@ -601,7 +512,8 @@ def doGameStep(app):
             moveEnemy(app, enemy)
         if app.timer % 40 == 0:
             makeEnemy(app)
-        if app.curMotion == app.damagedMotion and app.motionCounter - app.dmCounter == len(app.damagedMotion)-1:
+        if (app.curMotion == app.damagedMotion
+            and app.motionCounter - app.dmCounter == len(app.damagedMotion)-1):
             app.curMotion = app.generalMotion
         if app.lightning and app.smCounter >= 4:
             app.lightning = False
@@ -672,18 +584,8 @@ def doMenuStep(app):
         if distance(x1, y1, x2, y2) < 10:
             app.data = []
 
-# Perform step of the game when timer is fired
-def timerFired(app):
-    if app.paused or app.gameOver:
-        return
-    if app.countdown and time.time()-app.time >= 4:
-        app.countdown = False
-        app.gameStarted = True
-    elif app.gameStarted:
-        doGameStep(app)
-    else:
-        doMenuStep(app)
-
+# Drawing Helper Functions
+######################################################
 # Draws a trail behind the hand cursor by connecting lines between previous hand locs
 def drawTrail(app, canvas):
     for i in range(len(app.data)-1):
@@ -695,7 +597,9 @@ def drawTrail(app, canvas):
 def drawEnemies(app, canvas):
     for enemy in app.enemies:
         if app.testingMode:
-            canvas.create_oval(enemy.x-enemy.radius, enemy.y-enemy.radius, enemy.x+enemy.radius, enemy.y+enemy.radius, fill = "", outline = enemy.color, width = 4)
+            canvas.create_oval(enemy.x-enemy.radius, enemy.y-enemy.radius,
+                                enemy.x+enemy.radius, enemy.y+enemy.radius,
+                                fill = "", outline = enemy.color, width = 4)
         else:
             sprite = app.smogMotion[app.smCounter % len(app.smogMotion)]
             sprite = app.scaleImage(sprite, enemy.radius*0.017)
@@ -706,23 +610,36 @@ def drawEnemies(app, canvas):
         for gesture in enemy.gestures:
             gesturesString += gesture[0] + " "
         gesturesString = gesturesString[:-1]
-        canvas.create_text(enemy.x, enemy.y-enemy.radius-15, text = gesturesString, fill = app.spellColor[gesturesString[0]], font = "Arial 20 bold")
+        canvas.create_text(enemy.x, enemy.y-enemy.radius-15,
+                            text = gesturesString,
+                            fill = app.spellColor[gesturesString[0]],
+                            font = "Arial 20 bold")
         if app.lightning:
             sprite = app.lightningMotion[app.smCounter % len(app.lightningMotion)]
             canvas.create_image(enemy.x, enemy.y-75, image=ImageTk.PhotoImage(sprite))
         if app.testingMode:
-            blockingX, blockingY = isThroughWall(app, app.player.x, app.player.y, enemy.x, enemy.y)
+            blockingX, blockingY = isThroughWall(app, app.player.x,
+                                                app.player.y, enemy.x, enemy.y)
             if blockingX == -1 and blockingY == -1:
-                canvas.create_line(app.player.x, app.player.y, enemy.x, enemy.y, fill = "green", width = 4)
+                canvas.create_line(app.player.x, app.player.y, enemy.x, enemy.y,
+                                    fill = "green", width = 4)
             else:
-                canvas.create_line(app.player.x, app.player.y, blockingX, blockingY, fill = "red", width = 4)
-                canvas.create_line(blockingX, blockingY, enemy.x, enemy.y, fill = "red", width = 1)
-                canvas.create_oval(blockingX - 10, blockingY - 10, blockingX + 10, blockingY + 10, fill = "red")
+                canvas.create_line(app.player.x, app.player.y, blockingX,
+                                    blockingY, fill = "red", width = 4)
+                canvas.create_line(blockingX, blockingY, enemy.x, enemy.y,
+                                    fill = "red", width = 1)
+                canvas.create_oval(blockingX - 10, blockingY - 10,
+                                    blockingX + 10, blockingY + 10,
+                                    fill = "red")
 
 # Draws the player (axolotl)
 def drawPlayer(app, canvas):
     if app.testingMode:
-        canvas.create_oval(app.player.x-app.player.radius, app.player.y-app.player.radius, app.player.x+app.player.radius, app.player.y+app.player.radius, fill = "", outline = app.player.color, width = 4)
+        canvas.create_oval(app.player.x-app.player.radius,
+                            app.player.y-app.player.radius,
+                            app.player.x+app.player.radius,
+                            app.player.y+app.player.radius,
+                            fill = "", outline = app.player.color, width = 4)
     else:
         if app.gameOver:
             sprite = app.deadAxolotl
@@ -730,12 +647,16 @@ def drawPlayer(app, canvas):
             sprite = app.curMotion[app.motionCounter % len(app.curMotion)]
         if app.player.direction == -1:
             sprite = sprite.transpose(Image.FLIP_LEFT_RIGHT)
-        canvas.create_image(app.player.x-5, app.player.y, image=ImageTk.PhotoImage(sprite))
+        canvas.create_image(app.player.x-5, app.player.y,
+                            image=ImageTk.PhotoImage(sprite))
 
 # Draws the main menu
 def drawCover(app, canvas):
-    canvas.create_image((app.width-app.spellSize)/2, app.height/2, image=ImageTk.PhotoImage(app.cover))
-    canvas.create_text((app.width-app.spellSize)/2, 10, text = "Magic Axolotl Academy", anchor = "n", font = "Arial 40 bold")
+    canvas.create_image((app.width-app.spellSize)/2, app.height/2,
+                        image=ImageTk.PhotoImage(app.cover))
+    canvas.create_text((app.width-app.spellSize)/2, 10,
+                        text = "Magic Axolotl Academy",
+                        anchor = "n", font = "Arial 40 bold")
     howToPlay = """
 ——————————————————————————
 Left hand to move axolotl or press a to move automatically
@@ -750,15 +671,23 @@ Press g to end the game
 Press r to restart the game
 """
     howToPlay = howToPlay.splitlines()   
-    canvas.create_text((app.width-app.spellSize)/2, 95, text = "How To Play", anchor = "n", font = "Arial 16 bold")       
+    canvas.create_text((app.width-app.spellSize)/2, 95, text = "How To Play",
+                        anchor = "n", font = "Arial 16 bold")       
     for i in range(len(howToPlay)):
-        canvas.create_text((app.width-app.spellSize)/2, 105+i*25, text = howToPlay[i], anchor = "n", font = "Arial 14")
+        canvas.create_text((app.width-app.spellSize)/2, 105+i*25,
+                            text = howToPlay[i], anchor = "n", font = "Arial 14")
 
 # Draws the score, health, and current modes active
 def drawGameInfo(app, canvas):
-    canvas.create_text(10, 10, anchor = "nw", text = f"Score: {max(0, app.score)}", fill = "orange", font = "Arial 20 bold")
-    canvas.create_text(app.width-app.spellSize-10, 10, anchor = "ne", text = "♥ "*app.player.health, fill = "red", font = "Arial 20 bold")
+    canvas.create_text(10, 10, anchor = "nw",
+                        text = f"Score: {max(0, app.score)}",
+                        fill = "orange", font = "Arial 20 bold")
+    canvas.create_text(app.width-app.spellSize-10, 10, anchor = "ne",
+                        text = "♥ "*app.player.health, fill = "red",
+                        font = "Arial 20 bold")
     modes = ""
+    if app.paused:
+        modes += "\nPaused"
     if app.autoMode:
         modes += "\nAuto Mode"
     if app.testingMode:
@@ -766,7 +695,9 @@ def drawGameInfo(app, canvas):
     modes = modes.strip()
     modes = modes.splitlines()
     for i in range(len(modes)):
-        canvas.create_text((app.width-app.spellSize)/2, 10+i*30, anchor = "n", text = modes[i], font = "Arial 20 bold", fill = "magenta")
+        canvas.create_text((app.width-app.spellSize)/2, 10+i*30, anchor = "n",
+                            text = modes[i], font = "Arial 20 bold",
+                            fill = "magenta")
 
 # Draws the cells/walls in the game
 def drawCells(app, canvas):
@@ -784,32 +715,199 @@ def drawCells(app, canvas):
                 if app.testingMode:
                     canvas.create_rectangle(x0, y0, x1, y1, fill=fill)
                     if fill != "black":
-                        canvas.create_text((x1-x0)/2+x0, (y1-y0)/2+y0, text = str(app.cellDistances[row][col]), font = "Arial 8")
+                        canvas.create_text((x1-x0)/2+x0, (y1-y0)/2+y0,
+                                        text = str(app.cellDistances[row][col]),
+                                        font = "Arial 8")
                 else:
-                    canvas.create_rectangle(x0, y0, x1, y1, fill=fill, outline = "")
+                    canvas.create_rectangle(x0, y0, x1, y1,
+                                            fill=fill, outline = "")
 
 # Draws the game starting countdown
 def drawCountdown(app, canvas):
     if app.countdown:
         if int(4 - (time.time()-app.time)) == 0:
-            canvas.create_text((app.width-app.spellSize)/2, app.height/2, text = "Cast!", fill = "orange", font = "Arial 60 bold")
+            canvas.create_text((app.width-app.spellSize)/2, app.height/2,
+                                text = "Cast!", fill = "orange",
+                                font = "Arial 60 bold")
         else:
-            canvas.create_text((app.width-app.spellSize)/2, app.height/2, text = str(int(4 - (time.time()-app.time))), fill = "orange", font = "Arial 60 bold")
+            canvas.create_text((app.width-app.spellSize)/2, app.height/2,
+                                text = str(int(4 - (time.time()-app.time))),
+                                fill = "orange", font = "Arial 60 bold")
 
 # Draws the area to cast spells
 def drawSpellZone(app, canvas):
-    canvas.create_rectangle(app.width-app.spellSize, 0, app.width, app.height, fill = app.color)
-    canvas.create_text(app.width-app.spellSize/2, 10, anchor = "n", text = "Cast Your Spells Here", fill = "black", font = "Arial 20 bold")
+    canvas.create_rectangle(app.width-app.spellSize, 0, app.width, app.height,
+                            fill = app.color)
+    canvas.create_text(app.width-app.spellSize/2, 10, anchor = "n",
+                        text = "Cast Your Spells Here", fill = "black",
+                        font = "Arial 20 bold")
     if app.record:
-        canvas.create_text(app.width-app.spellSize/2, 45, anchor = "n", text = f"Training for {app.gestureToTrain}", fill = "black", font = "Arial 17")
+        canvas.create_text(app.width-app.spellSize/2, 45, anchor = "n",
+                            text = f"Training for {app.gestureToTrain}",
+                            fill = "black", font = "Arial 17")
 # Draws the cursor for each hand
 def drawHands(app, canvas):
-    canvas.create_oval(app.cx-10, app.cy-10, app.cx+10, app.cy+10, outline = "orange", width = 3)
-    canvas.create_oval(app.cx2-10, app.cy2-10, app.cx2+10, app.cy2+10, outline = "orange", width = 3)
+    canvas.create_oval(app.cx-10, app.cy-10, app.cx+10, app.cy+10,
+                        outline = "orange", width = 3)
+    canvas.create_oval(app.cx2-10, app.cy2-10, app.cx2+10, app.cy2+10,
+                        outline = "orange", width = 3)
+######################################################
+
+# Graphics Framework
+######################################################
+# Initilizes game
+def appStarted(app):
+    # Dimensions
+    app.rows = 45
+    app.cols = 60
+    app.spellSize = 600
+
+    # Game and cell scores
+    app.score = 0
+    app.cellDistances = [[-1]*app.cols for i in range(app.rows)]
+
+    # Wall generation
+    makeWalls(app,45, 20)
+
+    # Hand locations
+    app.cx = app.width/2 - app.spellSize/2
+    app.cy = app.height/2
+    app.cx2 = app.width/2 - app.spellSize/2
+    app.cy2 = app.height/2
+
+    timerDelay = 0
+
+    # Sprites and images
+    # Image Source: https://wallpapersafari.com/w/qofi3X
+    app.background = app.loadImage("underwaterBackground.jpg")
+    app.background = app.scaleImage(app.background, 1.25)
+    # Image credits: canva.com
+    app.cover = app.loadImage("cover.png")
+    # Image Source: https://spelunky.fyi/mods/m/axolotl-spelunker/
+    axolotlSpriteSheet = app.loadImage("axolotlSprite.png")
+    app.deadAxolotl = axolotlSpriteSheet.crop((1150, 0, 1290, 150))
+    app.generalMotion = []
+    for i in range(5):
+        sprite = axolotlSpriteSheet.crop((130*i, 170, 130*(i+1), 260))
+        app.generalMotion.append(sprite)
+    app.damagedMotion = []
+    for i in range(11):
+        sprite = axolotlSpriteSheet.crop((128*i, 520, 128*(i+1), 650))
+        app.damagedMotion.append(sprite)
+    # Image Source: https://www.pngjoy.com/preview/c9y7j3g3j2h7h0_sprite-2d-sprite-sheet-png-png-download/
+    smogSpriteSheet = app.loadImage("smogSprite.png")
+    app.smogMotion = []
+    for j in range(2):
+        for i in range(8):
+            sprite = smogSpriteSheet.crop((128*i, 120*j, 128*(i+1), 120*(j+1)))
+            app.smogMotion.append(sprite)
+    # Image Source: https://www.seekpng.com/ipng/u2q8q8i1u2t4q8i1_animation-sprite-electric-blue-lightning-game-lightning-animation/
+    lightningSpriteSheet = app.loadImage("lightningSprite.png")
+    app.lightningMotion = []
+    app.lightningMotion.append(lightningSpriteSheet.crop((15, 0, 335, 675)))
+    app.lightningMotion.append(lightningSpriteSheet.crop((745, 0, 1010, 675)))
+    app.lightningMotion.append(lightningSpriteSheet.crop((15, 695, 335, 1370)))
+    app.lightningMotion.append(lightningSpriteSheet.crop((745, 695, 1010, 1370)))
+    resized = []
+    for image in app.lightningMotion:
+        resized.append(app.scaleImage(image, 0.2))
+    app.lightningMotion = resized
+    app.lightning = False
+    app.curMotion = app.generalMotion
+
+    # Counters
+    app.motionCounter = 0
+    app.dmCounter = 0
+    app.smCounter = 0
+    app.timer  = 0
+    
+    # Game Conditions:
+    app.paused = False
+    app.countdown = False
+    app.gameStarted = False
+    app.gameOver = False
+
+    # Game Modes
+    app.autoMode = False
+    app.testingMode = False
+    app.record = False
+    app.addWalls = False
+
+    # Data collection For Training
+    app.data = []
+    app.gestureToTrain = "u"
+
+    # Spells
+    app.spellColor = {"—":"DeepPink2", "|":"cyan", "u":"spring green",
+                        "n":"magenta3", "none":"pink", "⚡":"yellow", "♥":"red"}
+    app.color = "pink"
+
+    # Enemy and player
+    app.enemiesPath = []
+    app.playerPath = []
+    app.enemies = []
+    app.player = Player(5, 45, "brown",(app.width-app.spellSize)/2,
+                        app.height/2, 1)
+    while shortestPathToPlayer(app, 0, 0) == []:
+        app.player = Player(5, 45, "brown",
+                            random.randint(0, app.width-app.spellSize),
+                            random.randint(0, app.height), 1)
+
+    # Model and scaler for gesture recognition
+    # Source for loading model: https://keras.io/api/models/model_saving_apis/#save_model-function
+    app.model = load_model("gestureRecognizer.h5")
+    # Source for loading scaler: https://machinelearningmastery.com/how-to-save-and-load-models-and-data-preparation-in-scikit-learn-for-later-use/
+    app.scaler = load(open('scaler.pkl', 'rb'))
+
+# Records data for training when f key pressed
+# Pauses game with p and steps with s for debugging
+def keyPressed(app ,event):
+    if event.key == 'r':
+        appStarted(app)
+    if event.key == 's':
+        if app.gameStarted and app.paused and not app.gameOver:
+            doGameStep(app)
+        elif not app.gameStarted and not app.gameOver:
+            app.countdown = True
+            app.time = time.time()
+    elif event.key == 'f':
+        app.record = not app.record
+    elif not app.gameStarted or app.gameOver:
+        return
+    elif event.key == 'p':
+        app.paused = not app.paused
+    elif event.key == 'w':
+        app.addWalls = not app.addWalls
+    elif event.key == 't':
+        app.testingMode = not app.testingMode
+    elif event.key == 'a':
+        app.autoMode = not app.autoMode
+        app.curMoveRow, app.curMoveCol = getCell(app, app.player.x, app.player.y)
+    elif event.key == 'g':
+        app.gameOver = True
+
+# Test function to manually add walls to the game for testing
+def mousePressed(app, event):
+    (row, col) = getCell(app, event.x, event.y)
+    if app.addWalls:
+     app.walls[row][col] = not app.walls[row][col]
+
+# Perform step of the game when timer is fired
+def timerFired(app):
+    if app.paused or app.gameOver:
+        return
+    if app.countdown and time.time()-app.time >= 4:
+        app.countdown = False
+        app.gameStarted = True
+    elif app.gameStarted:
+        doGameStep(app)
+    else:
+        doMenuStep(app)
 
 # Redraws all
 def redrawAll(app, canvas):
-    canvas.create_image((app.width-app.spellSize)/2, app.height/2, image=ImageTk.PhotoImage(app.background))
+    canvas.create_image((app.width-app.spellSize)/2, app.height/2,
+                        image=ImageTk.PhotoImage(app.background))
     drawSpellZone(app, canvas)
     drawHands(app, canvas)
     drawTrail(app, canvas)
@@ -820,9 +918,14 @@ def redrawAll(app, canvas):
         drawEnemies(app, canvas)
         drawGameInfo(app, canvas)
         if app.gameOver:
-            canvas.create_text((app.width-app.spellSize)/2, app.height/2, text = "Game Over", fill = "salmon", font = "Arial 60 bold")
-            canvas.create_text((app.width-app.spellSize)/2, app.height/2 + 60, text = "Press r to return to the main menu", fill = "lawn green", font = "Arial 20 bold")
+            canvas.create_text((app.width-app.spellSize)/2, app.height/2,
+                                text = "Game Over", fill = "salmon",
+                                font = "Arial 60 bold")
+            canvas.create_text((app.width-app.spellSize)/2, app.height/2 + 60,
+                                text = "Press r to return to the main menu",
+                                fill = "lawn green", font = "Arial 20 bold")
     elif not app.countdown:
         drawCover(app, canvas)
 
 runApp(width=1280+600, height=960)
+######################################################
