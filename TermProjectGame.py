@@ -1,3 +1,4 @@
+# Game inspired by https://www.google.com/doodles/halloween-2020
 import imutils
 import cv2
 import numpy as np
@@ -162,6 +163,7 @@ def findShortestPath(app, startRow, startCol, endRow, endCol, rows, cols, walls,
     visitedCells = set()
     unvisitedNeighborsQueue = [(startRow, startCol)]
     cellDistance = [[0]*app.cols for i in range(app.rows)]
+    cellDistance[startRow][startCol] = -99
     found = False
     foundDist = 0
     while len(unvisitedNeighborsQueue) != 0:
@@ -178,12 +180,14 @@ def findShortestPath(app, startRow, startCol, endRow, endCol, rows, cols, walls,
             newCol = col - dCol
             if 0 <= newRow < rows and 0 <= newCol < cols and (newRow, newCol) not in visitedCells and (newRow, newCol) not in unvisitedNeighborsQueue and not walls[newRow][newCol]:
                 if dists:
-                    cellDistance[newRow][newCol] = cellDistance[row][col] + 1
+                    if cellDistance[row][col] == -89:
+                        cellDistance[newRow][newCol] = cellDistance[row][col] + 101
+                    else:
+                        cellDistance[newRow][newCol] = cellDistance[row][col] + 1
                     app.cellDistances[newRow][newCol] += cellDistance[newRow][newCol]
                 unvisitedNeighborsQueue.append((newRow, newCol))
                 if not found:
                     cellMap[(newRow, newCol)] = cellMap.get((newRow, newCol), (row, col))
-
     if found:
         result = (endRow, endCol)
         path = []
@@ -246,35 +250,37 @@ def moveEnemy(app, enemy):
                 app.gameOver = True
 
 # Moves the player towards hand, avoiding walls
+# In auto mode, moves away from enemies while maintaining line of sight
 def movePlayer(app, x, y):
     cellWidth = (app.width-app.spellSize) / app.cols
     cellHeight = app.height / app.rows
     startRow, startCol = getCell(app, app.player.x, app.player.y)
     if app.autoMode:
-        if app.curMoveRow == startRow and app.curMoveCol == startCol:
-            maxDist = -1
-            maxRow = -1
-            maxCol = -1
-            for dRow in range(-10, 11):
-                for dCol in range(-10, 11):
-                    #if dRow == 0 and dCol == 0:
-                    #    continue
-                    endRow = startRow + dRow
-                    endCol = startCol + dCol
-                    if not 5 <= endRow < app.rows - 5 or not 5 <= endCol < app.cols - 5 or app.walls[endRow][endCol]:
-                        continue
-                    for enemy in app.enemies:
-                        cy = app.player.y + dRow*cellHeight
-                        cx = app.player.x + dCol*cellWidth
-                        if not isThroughWall(app, cx, cy, enemy.x, enemy.y):
-                            totalDist += 50
-                    totalDist = app.cellDistances[endRow][endCol]
-                    if totalDist > maxDist:
-                        maxDist = totalDist
-                        maxRow = endRow
-                        maxCol = endCol
-            app.curMoveRow = maxRow
-            app.curMoveCol = maxCol
+        #if app.curMoveRow == startRow and app.curMoveCol == startCol:
+        maxDist = -1
+        maxRow = -1
+        maxCol = -1
+        for dRow in range(-10, 11, 2):
+            for dCol in range(-10, 11, 2):
+                #if dRow == 0 and dCol == 0:
+                #    continue
+                totalDist = 0
+                endRow = startRow + dRow
+                endCol = startCol + dCol
+                if not 2 <= endRow < app.rows - 2 or not 2 <= endCol < app.cols - 2 or app.walls[endRow][endCol]:
+                    continue
+                for enemy in app.enemies:
+                    cy = app.player.y + dRow*cellHeight
+                    cx = app.player.x + dCol*cellWidth
+                    if isThroughWall(app, cx, cy, enemy.x, enemy.y) == (-1, -1) and app.cellDistances[endRow][endCol] > 0:
+                        app.cellDistances[endRow][endCol] *= 2
+                totalDist += app.cellDistances[endRow][endCol]
+                if totalDist > maxDist:
+                    maxDist = totalDist
+                    maxRow = endRow
+                    maxCol = endCol
+        app.curMoveRow = maxRow
+        app.curMoveCol = maxCol
         path = findShortestPath(app, startRow, startCol, app.curMoveRow, app.curMoveCol, app.rows, app.cols, app.walls, False)
     else:
         endRow, endCol = getCell(app, x, y)
@@ -325,8 +331,8 @@ def countNeighbors(app, row, col):
 # Makes natural looking walls with cellular automata model
 def makeWalls(app, empty, passes):
     app.walls = [[False]*app.cols for i in range(app.rows)]
-    for row in range(1, app.rows-1):
-        for col in range(1, app.cols-1):
+    for row in range(3, app.rows-3):
+        for col in range(3, app.cols-3):
             if random.randint(1, 100) >= empty:
                 app.walls[row][col] = True
     for i in range(passes):
@@ -353,7 +359,7 @@ def appStarted(app):
     app.score = 0
     app.spellSize = 600
     app.spellColor = {"—":"DeepPink2", "|":"cyan", "u":"spring green", "n":"magenta3", "none":"pink", "⚡":"yellow", "♥":"red"}
-    makeWalls(app, 40, 20)
+    makeWalls(app,45, 20)
     app.countdown = False
     app.gameStarted = False
     app.gameOver = False
@@ -505,27 +511,7 @@ def predictGesture(app):
     app.color = app.spellColor[gesture]
     return gesture
 
-# Function for displaying/testing line of sight
-def isThroughWallDisplay(app, x1, y1, x2, y2):
-    dx = int(x2-x1)
-    dy = int(y2-y1)
-    if dx == 0:
-        dx += 1
-    if dy == 0:
-        dy += 1
-    slope = dy/dx
-    for x in range(0, dx, int(abs(dx)/dx)):
-        y = x*slope + y1
-        row, col = getCell(app, x+x1, y)
-        if app.walls[row][col]:
-            return x+x1, y
-    for y in range(0, dy, int(abs(dy)/dy)):
-        x = y*(1/slope) + x1
-        row, col = getCell(app, x, y+y1)
-        if app.walls[row][col]:
-            return x, y+y1
-    return -1, -1
-
+# Function for testing line of sight
 def isThroughWall(app, x1, y1, x2, y2):
     dx = int(x2-x1)
     dy = int(y2-y1)
@@ -537,14 +523,14 @@ def isThroughWall(app, x1, y1, x2, y2):
     for x in range(0, dx, int(abs(dx)/dx)):
         y = x*slope + y1
         row, col = getCell(app, x+x1, y)
-        if app.walls[row][col]:
-            return True
+        if 0 <= row < app.rows and 0 <= col < app.cols and app.walls[row][col]:
+            return x+x1, y
     for y in range(0, dy, int(abs(dy)/dy)):
         x = y*(1/slope) + x1
         row, col = getCell(app, x, y+y1)
-        if app.walls[row][col]:
-            return True
-    return False
+        if 0 <= row < app.rows and 0 <= col < app.cols and app.walls[row][col]:
+            return x, y+y1
+    return -1, -1
 
 # Makes enemies take damage, heals player, or starts game based on the gesture
 def performSpells(app, gesture):
@@ -561,7 +547,7 @@ def performSpells(app, gesture):
         if enemy.gestures[0] == gesture or app.lightning:
             if gesture == "♥":
                 app.player.healPlayer(1)
-            if gesture != "⚡" and isThroughWall(app, app.player.x, app.player.y, enemy.x, enemy.y):
+            if gesture != "⚡" and isThroughWall(app, app.player.x, app.player.y, enemy.x, enemy.y) != (-1, -1):
                 continue
             enemy.damageEnemy(1)
             app.score += 50
@@ -719,7 +705,7 @@ def drawEnemies(app, canvas):
             sprite = app.lightningMotion[app.smCounter % len(app.lightningMotion)]
             canvas.create_image(enemy.x, enemy.y-75, image=ImageTk.PhotoImage(sprite))
         if app.testingMode:
-            blockingX, blockingY = isThroughWallDisplay(app, app.player.x, app.player.y, enemy.x, enemy.y)
+            blockingX, blockingY = isThroughWall(app, app.player.x, app.player.y, enemy.x, enemy.y)
             if blockingX == -1 and blockingY == -1:
                 canvas.create_line(app.player.x, app.player.y, enemy.x, enemy.y, fill = "green", width = 4)
             else:
@@ -735,7 +721,7 @@ def drawPlayer(app, canvas):
         sprite = app.curMotion[app.motionCounter % len(app.curMotion)]
     if app.player.direction == -1:
             sprite = sprite.transpose(Image.FLIP_LEFT_RIGHT)
-    #canvas.create_oval(app.player.x-app.player.radius, app.player.y-app.player.radius, app.player.x+app.player.radius, app.player.y+app.player.radius, fill = app.player.color)
+    #canvas.create_oval(app.player.x-app.player.radius, app.player.y-app.player.radius, app.player.x+app.player.radius, app.player.y+app.player.radius, fill = "")#app.player.color)
     canvas.create_image(app.player.x-5, app.player.y, image=ImageTk.PhotoImage(sprite))
 
 # Draws the main menu
