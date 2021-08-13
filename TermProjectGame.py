@@ -23,33 +23,37 @@ cv2.namedWindow('vid')
 
 # Inspiration for trackerbars: https://www.tutscode.net/2020/04/color-detection-with-python-and-opencv.html
 # Create sliders for HSV min and max for adjusting to object color
+
+'''
 cv2.createTrackbar('hMin', 'vid', 90, 179, whenTrackerbarChanged)
 cv2.createTrackbar('hMax', 'vid', 162, 179, whenTrackerbarChanged)
 cv2.createTrackbar('sMin', 'vid', 45, 255, whenTrackerbarChanged)
 cv2.createTrackbar('sMax', 'vid', 251, 255, whenTrackerbarChanged)
 cv2.createTrackbar('vMin', 'vid', 133, 255, whenTrackerbarChanged)
 cv2.createTrackbar('vMax', 'vid', 255, 255, whenTrackerbarChanged)
+'''
 
+# Determines the coordinates of the center of each hand
 def getCoodinates(app):
     worked, vid = cap.read()
     if not worked:
         return
     # Convert from BGR to HSV color
     hsv = cv2.cvtColor(vid, cv2.COLOR_BGR2HSV)
-
+    '''
     hMin = cv2.getTrackbarPos('hMin', 'vid')
     hMax = cv2.getTrackbarPos('hMax', 'vid')
     sMin = cv2.getTrackbarPos('sMin', 'vid')
     sMax = cv2.getTrackbarPos('sMax', 'vid')
     vMin = cv2.getTrackbarPos('vMin', 'vid')
     vMax = cv2.getTrackbarPos('vMax', 'vid')
-    
-    #hMin = 90
-    #hMax = 162
-    #sMin = 45
-    #sMax = 251
-    #vMin = 133
-    #vMax = 255
+    '''
+    hMin = 90
+    hMax = 162
+    sMin = 45
+    sMax = 251
+    vMin = 133
+    vMax = 255
 
     # Adjust the min and max color range based on the hsv values
     colorMin = np.array([hMin, sMin, vMin])
@@ -96,7 +100,7 @@ def getCoodinates(app):
 
 # Enemy Class
 class Enemy(object):
-    colors = ["orange", "yellow", "gray"]
+    colors = ["magenta", "yellow", "gray"]
     gestures = ["—", "|", "u", "n"]
     def __init__(self, health, speed, radius, x, y, heart, direction):
         self.health = health
@@ -355,7 +359,6 @@ def appStarted(app):
     app.testingMode = False
     app.enemiesPath = []
     app.playerPath = []
-    app.gestureToTrain = "—"
     app.score = 0
     app.spellSize = 600
     app.spellColor = {"—":"DeepPink2", "|":"cyan", "u":"spring green", "n":"magenta3", "none":"pink", "⚡":"yellow", "♥":"red"}
@@ -411,6 +414,7 @@ def appStarted(app):
     app.curMotion = app.generalMotion
     app.data = []
     app.record = False
+    app.gestureToTrain = "♥"
     app.buttonActive = False
     app.color = "pink"
     app.paused = False
@@ -451,6 +455,8 @@ def keyPressed(app ,event):
     elif event.key == 'a':
         app.autoMode = not app.autoMode
         app.curMoveRow, app.curMoveCol = getCell(app, app.player.x, app.player.y)
+    elif event.key == 'g':
+        app.gameOver = True
 
 # Temp function to manually add walls to the game for testing
 def mousePressed(app, event):
@@ -636,7 +642,6 @@ def doGameStep(app):
         x2, y2 = app.data[1]
         if distance(x1, y1, x2, y2) < 10:
             app.data = []
-
     app.timer += 1
 
 # Perform a step of the main menu to keep track of hand locations, and perfrom
@@ -689,13 +694,14 @@ def drawTrail(app, canvas):
 # Draws all of the enemies (smog monsters)
 def drawEnemies(app, canvas):
     for enemy in app.enemies:
-        sprite = app.smogMotion[app.smCounter % len(app.smogMotion)]
-        sprite = app.scaleImage(sprite, enemy.radius*0.017)
-        if enemy.direction == -1:
-            sprite = sprite.transpose(Image.FLIP_LEFT_RIGHT)
-        #canvas.create_oval(enemy.x-enemy.radius, enemy.y-enemy.radius, enemy.x+enemy.radius, enemy.y+enemy.radius, fill = enemy.color)
-        canvas.create_image(enemy.x, enemy.y, image=ImageTk.PhotoImage(sprite))
-        #canvas.create_text(enemy.x, enemy.y, text = str(enemy.health))
+        if app.testingMode:
+            canvas.create_oval(enemy.x-enemy.radius, enemy.y-enemy.radius, enemy.x+enemy.radius, enemy.y+enemy.radius, fill = "", outline = enemy.color, width = 4)
+        else:
+            sprite = app.smogMotion[app.smCounter % len(app.smogMotion)]
+            sprite = app.scaleImage(sprite, enemy.radius*0.017)
+            if enemy.direction == -1:
+                sprite = sprite.transpose(Image.FLIP_LEFT_RIGHT)
+            canvas.create_image(enemy.x, enemy.y, image=ImageTk.PhotoImage(sprite))
         gesturesString = ""
         for gesture in enemy.gestures:
             gesturesString += gesture[0] + " "
@@ -715,14 +721,16 @@ def drawEnemies(app, canvas):
 
 # Draws the player (axolotl)
 def drawPlayer(app, canvas):
-    if app.gameOver:
-        sprite = app.deadAxolotl
+    if app.testingMode:
+        canvas.create_oval(app.player.x-app.player.radius, app.player.y-app.player.radius, app.player.x+app.player.radius, app.player.y+app.player.radius, fill = "", outline = app.player.color, width = 4)
     else:
-        sprite = app.curMotion[app.motionCounter % len(app.curMotion)]
-    if app.player.direction == -1:
+        if app.gameOver:
+            sprite = app.deadAxolotl
+        else:
+            sprite = app.curMotion[app.motionCounter % len(app.curMotion)]
+        if app.player.direction == -1:
             sprite = sprite.transpose(Image.FLIP_LEFT_RIGHT)
-    #canvas.create_oval(app.player.x-app.player.radius, app.player.y-app.player.radius, app.player.x+app.player.radius, app.player.y+app.player.radius, fill = "")#app.player.color)
-    canvas.create_image(app.player.x-5, app.player.y, image=ImageTk.PhotoImage(sprite))
+        canvas.create_image(app.player.x-5, app.player.y, image=ImageTk.PhotoImage(sprite))
 
 # Draws the main menu
 def drawCover(app, canvas):
@@ -738,6 +746,7 @@ To start playing the game, cast a lightning bolt
 Press p to pause the game
 Press s to step when paused
 Press t for testing mode
+Press g to end the game
 Press r to restart the game
 """
     howToPlay = howToPlay.splitlines()   
@@ -745,11 +754,19 @@ Press r to restart the game
     for i in range(len(howToPlay)):
         canvas.create_text((app.width-app.spellSize)/2, 105+i*25, text = howToPlay[i], anchor = "n", font = "Arial 14")
 
-# Draws the score and health
+# Draws the score, health, and current modes active
 def drawGameInfo(app, canvas):
     canvas.create_text(10, 10, anchor = "nw", text = f"Score: {max(0, app.score)}", fill = "orange", font = "Arial 20 bold")
     canvas.create_text(app.width-app.spellSize-10, 10, anchor = "ne", text = "♥ "*app.player.health, fill = "red", font = "Arial 20 bold")
-    #canvas.create_text(app.width/2, 10, text = f"({app.cx}, {app.cy}) ({app.cx2}, {app.cy2})")
+    modes = ""
+    if app.autoMode:
+        modes += "\nAuto Mode"
+    if app.testingMode:
+        modes += "\nTesting Mode"
+    modes = modes.strip()
+    modes = modes.splitlines()
+    for i in range(len(modes)):
+        canvas.create_text((app.width-app.spellSize)/2, 10+i*30, anchor = "n", text = modes[i], font = "Arial 20 bold", fill = "magenta")
 
 # Draws the cells/walls in the game
 def drawCells(app, canvas):
@@ -782,8 +799,9 @@ def drawCountdown(app, canvas):
 # Draws the area to cast spells
 def drawSpellZone(app, canvas):
     canvas.create_rectangle(app.width-app.spellSize, 0, app.width, app.height, fill = app.color)
-    canvas.create_text(app.width-app.spellSize/2, 10, anchor = "n", text = f"Cast Your Spells Here", fill = "black", font = "Arial 20 bold")
-
+    canvas.create_text(app.width-app.spellSize/2, 10, anchor = "n", text = "Cast Your Spells Here", fill = "black", font = "Arial 20 bold")
+    if app.record:
+        canvas.create_text(app.width-app.spellSize/2, 45, anchor = "n", text = f"Training for {app.gestureToTrain}", fill = "black", font = "Arial 17")
 # Draws the cursor for each hand
 def drawHands(app, canvas):
     canvas.create_oval(app.cx-10, app.cy-10, app.cx+10, app.cy+10, outline = "orange", width = 3)
@@ -802,7 +820,8 @@ def redrawAll(app, canvas):
         drawEnemies(app, canvas)
         drawGameInfo(app, canvas)
         if app.gameOver:
-            canvas.create_text((app.width-app.spellSize)/2, app.height/2, text = "Game Over", fill = "orange", font = "Arial 60 bold")
+            canvas.create_text((app.width-app.spellSize)/2, app.height/2, text = "Game Over", fill = "salmon", font = "Arial 60 bold")
+            canvas.create_text((app.width-app.spellSize)/2, app.height/2 + 60, text = "Press r to return to the main menu", fill = "lawn green", font = "Arial 20 bold")
     elif not app.countdown:
         drawCover(app, canvas)
 
