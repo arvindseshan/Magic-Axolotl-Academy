@@ -18,7 +18,7 @@ time
 Game Shortcuts:
 when in main menu, press s to start game
 press r to reset
-press f to collect data for training gestures (default set to "u", but can be changed in the code by changing app.gestureToTrain in addStarted)
+press f to collect data for training gestures (default set to "u", but can be changed in the code by changing app.gestureToTrain in appStarted)
 during the game, press p to pause and s to step
 press g to end game
 press w to enable and disable wall manipulation and click with mouse to add/remove walls
